@@ -1,0 +1,10 @@
+This version uses one combined gomobile AAR:
+
+    app/libs/olcrtccombo.aar
+
+Build it with:
+
+    bash scripts/build_combo_aar.sh
+
+Do NOT keep old app/libs/olcrtc.aar together with olcrtccombo.aar.
+Two gomobile AARs usually create duplicate go.Seq classes.

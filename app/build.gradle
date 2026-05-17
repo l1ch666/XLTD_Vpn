@@ -1,0 +1,30 @@
+plugins {
+    id 'com.android.application'
+}
+
+android {
+    namespace 'com.s1dechain.olcrtcvpn'
+    compileSdk 35
+
+    defaultConfig {
+        applicationId 'com.s1dechain.olcrtcvpn'
+        minSdk 23
+        // Target 28 keeps the foreground-service setup simple for a local MVP APK.
+        // Raise it later when you add a production notification/FGS policy.
+        targetSdk 28
+        versionCode 11
+        versionName '1.6.1-universal-carrier'
+    }
+
+    sourceSets {
+        main {
+            jniLibs.srcDirs = ['src/main/jniLibs']
+        }
+    }
+}
+
+dependencies {
+    // Optional. Put the generated combo AAR here as app/libs/olcrtccombo.aar.
+    // The Java code uses reflection, so the project still builds without the AAR.
+    implementation fileTree(dir: 'libs', include: ['*.aar'])
+}
