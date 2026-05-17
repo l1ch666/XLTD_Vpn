@@ -26,7 +26,7 @@ powershell -ExecutionPolicy Bypass -File scripts/build_windows.ps1
 Output:
 
 ```text
-dist/windows/XLTD_Vpn-Windows-0.2.0-beta-win-x64.zip
+dist/windows/XLTD_Vpn-Windows-0.2.1-beta-win-x64.zip
 ```
 
 The package contains:

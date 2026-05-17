@@ -12,7 +12,7 @@ The repository now also contains a separate Windows beta client:
 windows/XLTD.Vpn.Windows
 ```
 
-Windows uses its own version line. Current Windows beta: `0.2.0-beta`. Build it with:
+Windows uses its own version line. Current Windows beta: `0.2.1-beta`. Build it with:
 
 ```powershell
 powershell -ExecutionPolicy Bypass -File scripts/build_windows.ps1

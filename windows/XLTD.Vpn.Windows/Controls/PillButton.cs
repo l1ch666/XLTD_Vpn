@@ -20,6 +20,7 @@ internal sealed class PillButton : Button
         Cursor = Cursors.Hand;
         Font = new Font("Segoe UI", 10, FontStyle.Bold);
         Height = 40;
+        Margin = new Padding(4, 2, 4, 2);
         SetStyle(ControlStyles.AllPaintingInWmPaint |
                  ControlStyles.UserPaint |
                  ControlStyles.OptimizedDoubleBuffer |
@@ -59,7 +60,8 @@ internal sealed class PillButton : Button
     {
         pevent.Graphics.SmoothingMode = SmoothingMode.AntiAlias;
         var color = pressed ? PressedColor : hovered ? HoverColor : FillColor;
-        using var path = UiShapes.RoundedRect(ClientRectangle, Radius);
+        var rect = Rectangle.Inflate(ClientRectangle, -1, -1);
+        using var path = UiShapes.RoundedRect(rect, Radius);
         using var fill = new SolidBrush(Enabled ? color : Color.FromArgb(210, 213, 219));
         using var text = new SolidBrush(Enabled ? TextColor : Color.FromArgb(120, 126, 136));
         pevent.Graphics.FillPath(fill, path);

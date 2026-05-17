@@ -1,5 +1,12 @@
 # Changelog
 
+## Windows 0.2.1-beta
+
+- Fixed Windows profile list painting so selected rows no longer show the system blue background.
+- Polished editor buttons to match the softer secondary-button style and avoid clipped pill bottoms.
+- Reduced noisy core trace logs in the GUI and disabled verbose core debug mode by default.
+- Improved startup status handling when `olcrtc.exe` exits before the local SOCKS listener is ready.
+
 ## Windows 0.2.0-beta
 
 - Restyled the Windows client with softer rounded cards, pill buttons, and a black/white visual direction closer to the Android app.

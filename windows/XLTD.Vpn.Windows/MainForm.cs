@@ -117,7 +117,7 @@ internal sealed class MainForm : Form
         layout.RowStyles.Add(new RowStyle(SizeType.Absolute, 30));
         layout.RowStyles.Add(new RowStyle(SizeType.Absolute, 40));
         layout.RowStyles.Add(new RowStyle(SizeType.Percent, 100));
-        layout.RowStyles.Add(new RowStyle(SizeType.Absolute, 44));
+        layout.RowStyles.Add(new RowStyle(SizeType.Absolute, 50));
         editor.Controls.Add(layout);
 
         layout.Controls.Add(SectionLabel("Profile"), 0, 0);
@@ -131,10 +131,16 @@ internal sealed class MainForm : Form
         StyleTextBox(linkBox);
         layout.Controls.Add(linkBox, 0, 2);
 
-        var buttons = new FlowLayoutPanel { Dock = DockStyle.Fill, FlowDirection = FlowDirection.RightToLeft };
+        var buttons = new FlowLayoutPanel
+        {
+            Dock = DockStyle.Fill,
+            FlowDirection = FlowDirection.RightToLeft,
+            Padding = new Padding(0, 4, 0, 0),
+            WrapContents = false
+        };
         saveButton.Text = "Save";
         saveButton.Width = 108;
-        StylePrimary(saveButton);
+        StyleSecondary(saveButton);
         deleteButton.Text = "Delete";
         deleteButton.Width = 108;
         StyleSecondary(deleteButton);
@@ -236,7 +242,7 @@ internal sealed class MainForm : Form
         saveButton.Click += (_, _) => SaveProfile();
         deleteButton.Click += (_, _) => DeleteSelectedProfile();
         connectButton.Click += async (_, _) => await ToggleConnectionAsync();
-        core.LogLine += line => Ui(() => AppendLog(line));
+        core.LogLine += line => Ui(() => HandleCoreLogLine(line));
         tunnel.LogLine += line => Ui(() => AppendLog("[tunnel] " + line));
         core.Exited += code => Ui(() =>
         {
@@ -292,11 +298,13 @@ internal sealed class MainForm : Form
             core.Start(config, AppInfo.DefaultSocksPort);
             connectButton.Text = "Stop";
 
-            using var cts = new CancellationTokenSource(TimeSpan.FromSeconds(24));
-            var ready = await core.WaitForSocksAsync(AppInfo.DefaultSocksPort, TimeSpan.FromSeconds(22), cts.Token);
+            using var cts = new CancellationTokenSource(TimeSpan.FromSeconds(48));
+            var ready = await core.WaitForSocksAsync(AppInfo.DefaultSocksPort, TimeSpan.FromSeconds(45), cts.Token);
             if (!ready)
             {
-                SetStatus("Core started, SOCKS is not ready yet. Watch log.");
+                SetStatus(core.IsRunning
+                    ? "Core is still starting. SOCKS is not ready yet."
+                    : "Core stopped before SOCKS became ready.");
                 return;
             }
 
@@ -381,6 +389,37 @@ internal sealed class MainForm : Form
         logBox.AppendText(DateTime.Now.ToString("HH:mm:ss") + " " + text + Environment.NewLine);
     }
 
+    private void HandleCoreLogLine(string line)
+    {
+        if (ShouldHideNoisyCoreLine(line)) return;
+        AppendLog(line);
+        var lower = line.ToLowerInvariant();
+        if (lower.Contains("socks5 server listening"))
+        {
+            statusLabel.Text = "Core is ready. Local SOCKS is listening.";
+        }
+        else if (lower.Contains("handshake client: read welcome") || lower.Contains("remote not ready"))
+        {
+            statusLabel.Text = "Handshake timeout. Check room/key/server side.";
+        }
+        else if (lower.Contains("ice connection state changed: connected") || lower.Contains("peer connection state changed: connected"))
+        {
+            statusLabel.Text = "Carrier connected. Waiting for tunnel handshake...";
+        }
+    }
+
+    private static bool ShouldHideNoisyCoreLine(string line)
+    {
+        if (string.IsNullOrWhiteSpace(line)) return true;
+        return line.Contains("[ice] TRACE:")
+               || line.Contains("[dtls] TRACE:")
+               || line.Contains("[sctp] TRACE:")
+               || line.Contains("[sctp] DEBUG:")
+               || line.Contains("Failed to ping without candidate pairs")
+               || line.Contains("wsasendto: A socket operation was attempted to an unreachable network")
+               || line.Contains("wsasendto: The requested address is not valid in its context");
+    }
+
     private void Ui(Action action)
     {
         if (IsDisposed) return;
@@ -391,7 +430,10 @@ internal sealed class MainForm : Form
     private void DrawProfileItem(object? sender, DrawItemEventArgs e)
     {
         if (e.Index < 0 || e.Index >= profilesList.Items.Count) return;
-        e.DrawBackground();
+        using (var bg = new SolidBrush(Color.White))
+        {
+            e.Graphics.FillRectangle(bg, e.Bounds);
+        }
         var profile = (Profile)profilesList.Items[e.Index];
         var selected = (e.State & DrawItemState.Selected) == DrawItemState.Selected;
         var rect = new Rectangle(e.Bounds.X + 4, e.Bounds.Y + 6, e.Bounds.Width - 8, e.Bounds.Height - 10);

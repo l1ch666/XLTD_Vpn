@@ -31,6 +31,7 @@ internal sealed class CoreProcessManager : IDisposable
             RedirectStandardError = true,
             WorkingDirectory = Path.GetDirectoryName(exe) ?? AppContext.BaseDirectory
         };
+        startInfo.Environment["PION_LOG_DISABLE"] = "all";
 
         process = new Process { StartInfo = startInfo, EnableRaisingEvents = true };
         process.OutputDataReceived += (_, args) => Publish(args.Data);
@@ -58,6 +59,7 @@ internal sealed class CoreProcessManager : IDisposable
         while (DateTimeOffset.UtcNow - started < timeout)
         {
             cancellationToken.ThrowIfCancellationRequested();
+            if (!IsRunning) return false;
             if (await TrySocksHandshakeAsync(port, cancellationToken).ConfigureAwait(false))
             {
                 return true;
@@ -150,7 +152,7 @@ internal sealed class CoreProcessManager : IDisposable
         sb.AppendLine("  failures: 3");
         AppendTransportOptions(sb, config);
         sb.AppendLine($"data: {Yaml(dataDir)}");
-        sb.AppendLine("debug: true");
+        sb.AppendLine("debug: false");
         return sb.ToString();
     }
 
