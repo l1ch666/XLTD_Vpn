@@ -1,11 +1,18 @@
 # Changelog
 
+## 1.6.4-universal-carrier
+
+- Fixed VP8 channel compatibility with legacy `%clientId` / `-client-id` links while keeping the newer room-URL binding fallback.
+- Allowed Android URI parsing from copied server output blocks that contain a prefixed `uri: olcrtc://...` line.
+- Added parser and VP8 binding-token regression coverage for legacy and universal-carrier links.
+
 ## Windows 0.2.1-beta
 
 - Fixed Windows profile list painting so selected rows no longer show the system blue background.
 - Polished editor buttons to match the softer secondary-button style and avoid clipped pill bottoms.
 - Reduced noisy core trace logs in the GUI and disabled verbose core debug mode by default.
 - Improved startup status handling when `olcrtc.exe` exits before the local SOCKS listener is ready.
+- Fixed Windows URI parsing from copied server output and rebuilt the bundled core with the same VP8 legacy/new binding-token compatibility as Android.
 
 ## Windows 0.2.0-beta
 

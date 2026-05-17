@@ -21,7 +21,7 @@ public final class OlcUriParser {
 
     public static OlcConfig parse(String raw) {
         if (raw == null) throw new IllegalArgumentException("empty link");
-        String s = raw.trim();
+        String s = extractUri(raw);
         if (!s.startsWith("olcrtc://")) {
             throw new IllegalArgumentException("link must start with olcrtc://");
         }
@@ -64,6 +64,20 @@ public final class OlcUriParser {
         if (!keyHex.matches("[0-9a-fA-F]{64}")) throw new IllegalArgumentException("keyHex is not hex");
 
         return new OlcConfig(carrier, transport, roomId, keyHex, clientId, comment, parts.params);
+    }
+
+    private static String extractUri(String raw) {
+        String s = raw.trim();
+        int start = s.toLowerCase(Locale.ROOT).indexOf("olcrtc://");
+        if (start < 0) return s;
+        s = s.substring(start).trim();
+        int cr = s.indexOf('\r');
+        int lf = s.indexOf('\n');
+        int end = -1;
+        if (cr >= 0 && lf >= 0) end = Math.min(cr, lf);
+        else if (cr >= 0) end = cr;
+        else if (lf >= 0) end = lf;
+        return end >= 0 ? s.substring(0, end).trim() : s;
     }
 
     private static TailParts parseTail(String rawTail) {

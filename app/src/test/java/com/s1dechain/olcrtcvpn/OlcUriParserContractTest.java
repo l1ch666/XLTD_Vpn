@@ -6,6 +6,7 @@ public final class OlcUriParserContractTest {
     public static void main(String[] args) {
         parsesUniversalCarrierUriWithoutClientId();
         parsesLegacyClientIdTail();
+        parsesUriLineFromServerOutput();
         usesClientIdTransportParam();
         acceptsAliasesAndJazzEmptyRoom();
         rejectsBadKey();
@@ -39,6 +40,24 @@ public final class OlcUriParserContractTest {
         assertEquals("transport", OlcUriParser.TRANSPORT_DATA, config.transport);
         assertEquals("clientId", "android-client", config.clientId);
         assertEquals("comment", "direct", config.comment);
+    }
+
+    private static void parsesUriLineFromServerOutput() {
+        OlcConfig config = OlcUriParser.parse(
+                "uri: olcrtc://telemost?vp8channel<vp8-fps=60&vp8-batch=64>@79061977050409#"
+                        + "beec9b28b272c3dee5724229906bc0d236f650c887cf3c5014743e23af1f6597"
+                        + "%default$79061977050409\n\n"
+                        + "Client command:\n"
+                        + "  ./olcrtc -mode cnc -carrier \"telemost\" -client-id \"default\""
+        );
+
+        assertEquals("carrier", "telemost", config.carrier);
+        assertEquals("transport", OlcUriParser.TRANSPORT_VP8, config.transport);
+        assertEquals("roomId", "79061977050409", config.roomId);
+        assertEquals("clientId", "default", config.clientId);
+        assertEquals("comment", "79061977050409", config.comment);
+        assertEquals("vp8-fps", 60, config.intParam("vp8-fps", 0));
+        assertEquals("vp8-batch", 64, config.intParam("vp8-batch", 0));
     }
 
     private static void usesClientIdTransportParam() {

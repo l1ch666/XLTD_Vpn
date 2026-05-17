@@ -1,4 +1,4 @@
-# olcRTC Android client — 1.6.3 universal-carrier
+# olcRTC Android client — 1.6.4 universal-carrier
 
 This build updates the Android client for the `openlibrecommunity/olcrtc` `refactor/universal-carrier` branch.
 
@@ -37,6 +37,9 @@ Reality check for Android VPN mode:
 
 ## URI support
 
+Both Android and Windows accept either a raw `olcrtc://...` link or a copied
+server output block that contains a `uri: olcrtc://...` line.
+
 ### New universal-carrier style
 
 No `%clientId` is required. Android defaults `clientId` to `default` unless you put `client-id=...` in transport params.
@@ -58,6 +61,11 @@ The old format with `%clientId` still parses:
 ```text
 olcrtc://telemost?vp8channel<vp8-fps=30&vp8-batch=4>@25000437143020#81a715aad4224c9179bd36c6725a9375b65d85161f81c12ab20dc23cb276a71b%default$direct
 ```
+
+For `vp8channel`, the bundled core now probes both binding schemes during
+startup: legacy `%clientId` / `-client-id` and the newer room-based token. It
+pins to the first valid peer token it receives, which keeps compatibility while
+avoiding duplicate traffic after the peer is detected.
 
 ## Transport params
 
@@ -110,6 +118,12 @@ Example:
 ```text
 olcrtc://wbstream?vp8channel<vp8-fps=60&vp8-batch=64&tcp-limit=2&mtu=1040&client-id=default>@019e1742-db64-733a-a991-a570984bdb59#bbb9a2e3613bd4dc93fc88f858e0a4a882b30b55976cb6f408e1f421a9cda9c4$wb-vp8
 ```
+
+## What changed in 1.6.4
+
+- Fixed VP8 channel startup against legacy `%clientId` / `-client-id` generated links while keeping compatibility with newer universal-carrier room binding.
+- Allowed parser input copied from server output blocks such as `uri: olcrtc://...`.
+- Added regression coverage for the server-output URI format and VP8 binding-token fallback.
 
 ## What changed in 1.6.3
 

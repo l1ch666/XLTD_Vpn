@@ -21,7 +21,7 @@ internal static class OlcUriParser
             throw new ArgumentException("empty link");
         }
 
-        var value = raw.Trim();
+        var value = ExtractUri(raw);
         if (!value.StartsWith(Scheme, StringComparison.OrdinalIgnoreCase))
         {
             throw new ArgumentException("link must start with olcrtc://");
@@ -71,6 +71,20 @@ internal static class OlcUriParser
     public static bool IsSupportedTransport(string transport)
     {
         return transport is TransportData or TransportVp8 or TransportSei or TransportVideo;
+    }
+
+    private static string ExtractUri(string raw)
+    {
+        var value = raw.Trim();
+        var start = value.IndexOf(Scheme, StringComparison.OrdinalIgnoreCase);
+        if (start < 0)
+        {
+            return value;
+        }
+
+        value = value[start..].Trim();
+        var lineEnd = value.IndexOfAny(['\r', '\n']);
+        return lineEnd >= 0 ? value[..lineEnd].Trim() : value;
     }
 
     private static TransportParts ParseTransportSpec(string spec)

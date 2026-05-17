@@ -23,10 +23,13 @@ bash scripts/build_combo_aar.sh
 gradle clean :app:assembleDebug
 ```
 
+Both Android and Windows build helpers apply tracked patches from `patches/`
+to the local `.external/olcrtc` checkout before compiling bundled core code.
+
 ## Versioning
 
 - Bump `versionCode` for every user-visible or behavioral improvement.
-- Bump `versionName` with the same intent, for example `1.6.3-universal-carrier`.
+- Bump `versionName` with the same intent, for example `1.6.4-universal-carrier`.
 - Add a short entry to `CHANGELOG.md` before publishing.
 - Keep Windows versioning separate under `windows/XLTD.Vpn.Windows`:
   - Android stable line: `1.6.x-universal-carrier`.
@@ -54,6 +57,6 @@ Before publishing:
 2. Commit only source, scripts, and documentation changes.
 3. Build the debug APK with `scripts/build_apk.ps1`.
 4. Build the Windows beta package with `scripts/build_windows.ps1` when a Windows change is included.
-5. Upload Android APKs to stable Android tags such as `v1.6.3`.
+5. Upload Android APKs to stable Android tags such as `v1.6.4`.
 6. Upload Windows beta zips to pre-release Windows tags such as `windows-v0.2.1-beta`.
 7. Include the SHA256 printed by each build helper in the release notes.

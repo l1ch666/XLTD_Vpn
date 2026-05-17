@@ -14,6 +14,7 @@ $projectDir = Split-Path -Parent $project
 $toolsDir = Join-Path $projectDir "tools"
 $olcrtcSource = Join-Path $projectRoot ".external\olcrtc"
 $tun2socksSource = Join-Path $projectRoot ".external\tun2socks"
+$olcrtcPatch = Join-Path $projectRoot "patches\olcrtc-vp8-legacy-binding.patch"
 $distRoot = Join-Path $projectRoot "dist\windows"
 $publishDir = Join-Path $distRoot "XLTD_Vpn_Windows-$version-$Runtime"
 $zipPath = Join-Path $distRoot "XLTD_Vpn-Windows-$version-$Runtime.zip"
@@ -34,6 +35,43 @@ function Reset-Directory([string]$Path) {
     New-Item -ItemType Directory -Force -Path $Path | Out-Null
 }
 
+function Apply-GitPatchIfNeeded([string]$Repo, [string]$Patch) {
+    if (-not (Test-Path $Patch)) {
+        return
+    }
+
+    Push-Location $Repo
+    try {
+        $previousErrorActionPreference = $ErrorActionPreference
+        $ErrorActionPreference = "Continue"
+        & git apply --check $Patch *> $null
+        $applyCode = $LASTEXITCODE
+        $ErrorActionPreference = $previousErrorActionPreference
+        if ($applyCode -eq 0) {
+            Write-Host "Applying local olcRTC compatibility patch: $Patch"
+            & git apply $Patch
+            if ($LASTEXITCODE -ne 0) {
+                throw "git apply failed with exit code $LASTEXITCODE"
+            }
+            return
+        }
+
+        $previousErrorActionPreference = $ErrorActionPreference
+        $ErrorActionPreference = "Continue"
+        & git apply --reverse --check $Patch *> $null
+        $reverseCode = $LASTEXITCODE
+        $ErrorActionPreference = $previousErrorActionPreference
+        if ($reverseCode -eq 0) {
+            Write-Host "Local olcRTC compatibility patch already applied."
+            return
+        }
+
+        throw "Local olcRTC compatibility patch does not apply cleanly: $Patch"
+    } finally {
+        Pop-Location
+    }
+}
+
 if (-not (Get-Command go -ErrorAction SilentlyContinue)) {
     throw "Go is required to build olcrtc.exe"
 }
@@ -49,6 +87,8 @@ if (-not (Test-Path $olcrtcSource)) {
 if (-not (Test-Path $tun2socksSource)) {
     throw "Missing local tun2socks source at $tun2socksSource. Rebuild/fetch .external first."
 }
+
+Apply-GitPatchIfNeeded $olcrtcSource $olcrtcPatch
 
 Reset-Directory $toolsDir
 New-Item -ItemType Directory -Force -Path (Join-Path $toolsDir "data") | Out-Null
