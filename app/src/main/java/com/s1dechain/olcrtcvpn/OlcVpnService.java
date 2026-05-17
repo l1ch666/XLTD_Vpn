@@ -3,6 +3,7 @@ package com.s1dechain.olcrtcvpn;
 import android.app.Notification;
 import android.app.NotificationChannel;
 import android.app.NotificationManager;
+import android.app.PendingIntent;
 import android.content.Intent;
 import android.net.ConnectivityManager;
 import android.net.IpPrefix;
@@ -69,6 +70,7 @@ public final class OlcVpnService extends VpnService {
             "77.88.8.8:443",
             "91.108.56.162:443"
     };
+    private static volatile String lastStatusSnapshot = "";
 
     private final Object lock = new Object();
     private Thread worker;
@@ -95,6 +97,10 @@ public final class OlcVpnService extends VpnService {
     private volatile int olcRemoteReadyEvents = 0;
     private volatile String activeNetworkSignature = "";
 
+    public static String getLastStatusSnapshot() {
+        return lastStatusSnapshot;
+    }
+
     @Override
     public int onStartCommand(Intent intent, int flags, int startId) {
         if (intent == null) return START_NOT_STICKY;
@@ -107,6 +113,7 @@ public final class OlcVpnService extends VpnService {
             currentLink = null;
             sendStatus("Отключаюсь...");
             shutdownResources();
+            sendStatus("Отключено.");
             stopSelf();
             return START_NOT_STICKY;
         }
@@ -861,6 +868,7 @@ public final class OlcVpnService extends VpnService {
     }
 
     private void sendStatus(String status) {
+        lastStatusSnapshot = status == null ? "" : status;
         Log.i(TAG, "STATUS: " + status);
         Intent intent = new Intent(ACTION_STATUS);
         intent.setPackage(getPackageName());
@@ -879,10 +887,19 @@ public final class OlcVpnService extends VpnService {
                 ? new Notification.Builder(this, CHANNEL_ID)
                 : new Notification.Builder(this);
 
+        Intent openIntent = new Intent(this, MainActivity.class);
+        openIntent.setFlags(Intent.FLAG_ACTIVITY_CLEAR_TOP | Intent.FLAG_ACTIVITY_SINGLE_TOP);
+        int pendingFlags = PendingIntent.FLAG_UPDATE_CURRENT;
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
+            pendingFlags |= PendingIntent.FLAG_IMMUTABLE;
+        }
+        PendingIntent contentIntent = PendingIntent.getActivity(this, 0, openIntent, pendingFlags);
+
         Notification notification = builder
                 .setContentTitle("olcRTC VPN")
                 .setContentText(text)
                 .setSmallIcon(android.R.drawable.stat_sys_download_done)
+                .setContentIntent(contentIntent)
                 .setOngoing(true)
                 .build();
 
@@ -914,6 +931,7 @@ public final class OlcVpnService extends VpnService {
     public void onDestroy() {
         stopRequested = true;
         shutdownResources();
+        sendStatus("Отключено.");
         super.onDestroy();
     }
 }

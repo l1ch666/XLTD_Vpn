@@ -55,6 +55,8 @@ try {
     $outApk = "dist\XLTD_Vpn-$versionName-debug.apk"
     Copy-Item $sourceApk $outApk -Force
     Write-Host "APK: $outApk"
+    $hash = Get-FileHash $outApk -Algorithm SHA256
+    Write-Host "SHA256: $($hash.Hash.ToLowerInvariant())"
 } finally {
     Pop-Location
 }

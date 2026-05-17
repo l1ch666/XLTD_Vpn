@@ -1,5 +1,12 @@
 # Changelog
 
+## 1.6.3-universal-carrier
+
+- Registered the runtime status receiver as not exported on Android 13+.
+- Restored the latest service status when the activity is recreated or reopened.
+- Added a notification content intent so tapping the foreground VPN notification opens the app.
+- Printed SHA256 from the APK build helper for release verification.
+
 ## 1.6.2-universal-carrier
 
 - Guarded controlled reconnect threads with the active worker generation before shutdown/start handoff.

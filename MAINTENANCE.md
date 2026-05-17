@@ -26,13 +26,17 @@ gradle clean :app:assembleDebug
 ## Versioning
 
 - Bump `versionCode` for every user-visible or behavioral improvement.
-- Bump `versionName` with the same intent, for example `1.6.2-universal-carrier`.
+- Bump `versionName` with the same intent, for example `1.6.3-universal-carrier`.
 - Add a short entry to `CHANGELOG.md` before publishing.
 
 ## GitHub publishing
 
-This folder is currently a source snapshot, not a git checkout. Before publishing:
+The canonical private repository is `l1ch666/XLTD_Vpn`.
 
-1. Initialize a git repository or clone the target GitHub repository.
-2. Commit the source files, excluding generated outputs such as `.tmp/`, `.external/`, `build/`, and `app/build/`.
-3. Decide whether `app/libs/olcrtccombo.aar` should be published as a binary artifact or rebuilt by users locally.
+Before publishing:
+
+1. Keep generated outputs out of commits: `.tmp/`, `.external/`, `.gradle/`, `build/`, `app/build/`, `dist/`, and generated `app/libs/*.aar`.
+2. Commit only source, scripts, and documentation changes.
+3. Build the debug APK with `scripts/build_apk.ps1`.
+4. Upload the APK from `dist/` to a GitHub release tag matching the app version, for example `v1.6.3`.
+5. Include the SHA256 printed by the build helper in the release notes.

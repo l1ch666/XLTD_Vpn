@@ -1,4 +1,4 @@
-# olcRTC Android client — 1.6.2 universal-carrier
+# olcRTC Android client — 1.6.3 universal-carrier
 
 This build updates the Android client for the `openlibrecommunity/olcrtc` `refactor/universal-carrier` branch.
 
@@ -94,6 +94,13 @@ Example:
 ```text
 olcrtc://wbstream?vp8channel<vp8-fps=60&vp8-batch=64&tcp-limit=2&mtu=1040&client-id=default>@019e1742-db64-733a-a991-a570984bdb59#bbb9a2e3613bd4dc93fc88f858e0a4a882b30b55976cb6f408e1f421a9cda9c4$wb-vp8
 ```
+
+## What changed in 1.6.3
+
+- Registered the in-app status receiver with `RECEIVER_NOT_EXPORTED` on Android 13+ for cleaner compatibility with newer platform rules.
+- Added an in-process last-status snapshot so reopening or rotating the app restores the latest VPN status instead of falling back to a disconnected-looking UI.
+- Added a notification tap action that returns to the main VPN screen.
+- `scripts/build_apk.ps1` now prints the APK SHA256 hash used in GitHub release notes.
 
 ## What changed in 1.6.2
 

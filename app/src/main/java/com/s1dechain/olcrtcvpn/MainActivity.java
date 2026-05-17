@@ -57,6 +57,7 @@ public final class MainActivity extends Activity {
     private String selectedProfileId;
     private String editingProfileId;
     private int connectionState = STATE_DISCONNECTED;
+    private boolean statusReceiverRegistered = false;
 
     private final BroadcastReceiver statusReceiver = new BroadcastReceiver() {
         @Override
@@ -94,14 +95,37 @@ public final class MainActivity extends Activity {
     @Override
     protected void onStart() {
         super.onStart();
-        registerReceiver(statusReceiver, new IntentFilter(OlcVpnService.ACTION_STATUS));
+        registerStatusReceiver();
+        String lastStatus = OlcVpnService.getLastStatusSnapshot();
+        if (!TextUtils.isEmpty(lastStatus)) applyServiceStatus(lastStatus);
         refreshProfilesList();
     }
 
     @Override
     protected void onStop() {
-        try { unregisterReceiver(statusReceiver); } catch (Exception ignored) {}
+        unregisterStatusReceiver();
         super.onStop();
+    }
+
+    private void registerStatusReceiver() {
+        if (statusReceiverRegistered) return;
+        IntentFilter filter = new IntentFilter(OlcVpnService.ACTION_STATUS);
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+            registerReceiver(statusReceiver, filter, Context.RECEIVER_NOT_EXPORTED);
+        } else {
+            registerReceiver(statusReceiver, filter);
+        }
+        statusReceiverRegistered = true;
+    }
+
+    private void unregisterStatusReceiver() {
+        if (!statusReceiverRegistered) return;
+        try {
+            unregisterReceiver(statusReceiver);
+        } catch (Exception ignored) {
+        } finally {
+            statusReceiverRegistered = false;
+        }
     }
 
     @Override
@@ -706,6 +730,7 @@ public final class MainActivity extends Activity {
         String lower = s.toLowerCase();
 
         if (lower.contains("vpn connected")) return "VPN подключён. Трафик идёт через туннель.";
+        if (lower.contains("отключено")) return "VPN отключён.";
         if (lower.contains("ссылка разобрана")) return "Ссылка принята. Готовлю подключение.";
         if (lower.contains("dns auto")) return "DNS выбран автоматически.";
         if (lower.contains("подключаю olcrtc")) return "Подключаю olcRTC...";
@@ -763,7 +788,7 @@ public final class MainActivity extends Activity {
             applyConnectionState(STATE_CONNECTED, "Подключено");
         } else if (s.contains("olcrtc подключён") || s.contains("подключаю olcrtc") || s.contains("автопереподключение") || s.contains("запускаю") || s.contains("ссылка разобрана") || s.contains("сеть изменилась") || s.contains("keepalive")) {
             applyConnectionState(STATE_CONNECTING, "Подключение...");
-        } else if (s.contains("ошибка") || s.contains("не выдано") || s.contains("отключаюсь") || s.contains("отключение отправлено") || s.contains("stopped")) {
+        } else if (s.contains("ошибка") || s.contains("не выдано") || s.contains("отключаюсь") || s.contains("отключено") || s.contains("отключение отправлено") || s.contains("stopped")) {
             applyConnectionState(STATE_DISCONNECTED, "Отключено");
         }
     }
