@@ -1,5 +1,12 @@
 # Changelog
 
+## Windows 0.1.0-beta
+
+- Added the first native Windows beta client under `windows/XLTD.Vpn.Windows`.
+- Added the Windows `olcrtc://` URI parser, local profile storage, local SOCKS startup, and optional Windows user proxy mode.
+- Added `scripts/build_windows.ps1` to build `olcrtc.exe`, publish the GUI, package a zip, and print SHA256.
+- Added `WINDOWS.md` with the Windows beta scope and versioning policy.
+
 ## 1.6.3-universal-carrier
 
 - Registered the runtime status receiver as not exported on Android 13+.

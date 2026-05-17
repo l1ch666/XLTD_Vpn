@@ -4,6 +4,22 @@ This build updates the Android client for the `openlibrecommunity/olcrtc` `refac
 
 Main point: the old app was mostly `datachannel/vp8channel`-only and expected the older URI layout with `%clientId`. The universal-carrier branch changes carrier/transport compatibility and the client URI docs no longer require `%clientId`, so the Android parser and combo AAR builder were updated.
 
+## Windows beta
+
+The repository now also contains a separate Windows beta client:
+
+```text
+windows/XLTD.Vpn.Windows
+```
+
+Windows uses its own version line: `0.1.0-beta`. Build it with:
+
+```powershell
+powershell -ExecutionPolicy Bypass -File scripts/build_windows.ps1
+```
+
+See `WINDOWS.md` for the Windows beta scope and release policy.
+
 ## Accepted transports
 
 ```text

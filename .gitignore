@@ -6,6 +6,9 @@ app/libs/*-sources.jar
 dist/
 .external/
 .tmp/
+windows/**/bin/
+windows/**/obj/
+windows/**/tools/
 local.properties
 *.iml
 .DS_Store
