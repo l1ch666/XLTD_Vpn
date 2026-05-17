@@ -10,6 +10,14 @@ powershell -ExecutionPolicy Bypass -File scripts/run_parser_contract_test.ps1
 
 Full APK verification still requires a generated combo AAR:
 
+```powershell
+powershell -ExecutionPolicy Bypass -File scripts/build_apk.ps1
+```
+
+The helper builds a debug APK and copies it into `dist/` for release upload.
+
+For a combo-AAR build from source:
+
 ```bash
 bash scripts/build_combo_aar.sh
 gradle clean :app:assembleDebug

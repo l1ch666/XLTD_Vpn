@@ -99,6 +99,10 @@ import (
 	"github.com/openlibrecommunity/olcrtc/internal/client"
 	"github.com/openlibrecommunity/olcrtc/internal/logger"
 	"github.com/openlibrecommunity/olcrtc/internal/protect"
+	"github.com/openlibrecommunity/olcrtc/internal/transport"
+	"github.com/openlibrecommunity/olcrtc/internal/transport/seichannel"
+	"github.com/openlibrecommunity/olcrtc/internal/transport/videochannel"
+	"github.com/openlibrecommunity/olcrtc/internal/transport/vp8channel"
 	_ "github.com/xjasonlyu/tun2socks/v2/dns"
 	"github.com/xjasonlyu/tun2socks/v2/engine"
 	M "github.com/xjasonlyu/tun2socks/v2/metadata"
@@ -681,6 +685,66 @@ func StartWithTransport(carrierName, transportName, roomID, clientID, keyHex str
 	return startWithConfig(carrierName, transportName, roomID, clientID, keyHex, socksPort, socksUser, socksPass, cfg)
 }
 
+func mobileClientConfig(
+	cfg mobileConfig,
+	carrierName string,
+	roomURL string,
+	keyHex string,
+	clientID string,
+	socksPort int,
+	socksUser string,
+	socksPass string,
+) client.Config {
+	return client.Config{
+		Transport:        cfg.transport,
+		Carrier:          carrierName,
+		RoomURL:          roomURL,
+		ChannelID:        clientID,
+		KeyHex:           keyHex,
+		DeviceID:         clientID,
+		LocalAddr:        fmt.Sprintf("127.0.0.1:%d", socksPort),
+		DNSServer:        cfg.dnsServer,
+		SOCKSUser:        socksUser,
+		SOCKSPass:        socksPass,
+		TransportOptions: mobileTransportOptions(cfg),
+		Engine:           cfg.engine,
+		URL:              cfg.url,
+		Token:            cfg.token,
+	}
+}
+
+func mobileTransportOptions(cfg mobileConfig) transport.Options {
+	switch cfg.transport {
+	case transportVP8:
+		return vp8channel.Options{
+			FPS:       cfg.vp8FPS,
+			BatchSize: cfg.vp8BatchSize,
+		}
+	case transportSEI:
+		return seichannel.Options{
+			FPS:          cfg.seiFPS,
+			BatchSize:    cfg.seiBatchSize,
+			FragmentSize: cfg.seiFragmentSize,
+			AckTimeoutMS: cfg.seiAckTimeoutMS,
+		}
+	case transportVideo:
+		return videochannel.Options{
+			Width:      cfg.videoWidth,
+			Height:     cfg.videoHeight,
+			FPS:        cfg.videoFPS,
+			Bitrate:    cfg.videoBitrate,
+			HW:         cfg.videoHW,
+			QRSize:     cfg.videoQRSize,
+			QRRecovery: cfg.videoQRRecovery,
+			Codec:      cfg.videoCodec,
+			TileModule: cfg.videoTileModule,
+			TileRS:     cfg.videoTileRS,
+		}
+	default:
+		return nil
+	}
+}
+
 func startWithConfig(carrierName, transportName, roomID, clientID, keyHex string, socksPort int, socksUser, socksPass string, cfg mobileConfig) error {
 	runtimeMu.Lock()
 	defer runtimeMu.Unlock()
@@ -724,36 +788,8 @@ func startWithConfig(carrierName, transportName, roomID, clientID, keyHex string
 		defer cancelFunc()
 		err := runClientWithReady(
 			ctx,
-			cfg.link,
-			cfg.transport,
-			carrierName,
-			roomURL,
-			keyHex,
-			clientID,
-			fmt.Sprintf("127.0.0.1:%d", socksPort),
-			cfg.dnsServer,
-			socksUser,
-			socksPass,
+			mobileClientConfig(cfg, carrierName, roomURL, keyHex, clientID, socksPort, socksUser, socksPass),
 			func() { readyOnce.Do(func() { close(localReady) }) },
-			cfg.videoWidth,
-			cfg.videoHeight,
-			cfg.videoFPS,
-			cfg.videoBitrate,
-			cfg.videoHW,
-			cfg.videoQRSize,
-			cfg.videoQRRecovery,
-			cfg.videoCodec,
-			cfg.videoTileModule,
-			cfg.videoTileRS,
-			cfg.vp8FPS,
-			cfg.vp8BatchSize,
-			cfg.seiFPS,
-			cfg.seiBatchSize,
-			cfg.seiFragmentSize,
-			cfg.seiAckTimeoutMS,
-			cfg.engine,
-			cfg.url,
-			cfg.token,
 		)
 		runtimeMu.Lock()
 		cancel = nil
@@ -797,36 +833,8 @@ func Check(carrierName, transportName, roomID, clientID, keyHex string, socksPor
 	go func() {
 		doneCh <- runClientWithReady(
 			ctx,
-			cfg.link,
-			cfg.transport,
-			carrierName,
-			buildRoomURL(carrierName, roomID),
-			keyHex,
-			clientID,
-			fmt.Sprintf("127.0.0.1:%d", socksPort),
-			defaultDNSServer,
-			"",
-			"",
+			mobileClientConfig(cfg, carrierName, buildRoomURL(carrierName, roomID), keyHex, clientID, socksPort, "", ""),
 			func() { readyOnce.Do(func() { close(readyCh) }) },
-			cfg.videoWidth,
-			cfg.videoHeight,
-			cfg.videoFPS,
-			cfg.videoBitrate,
-			cfg.videoHW,
-			cfg.videoQRSize,
-			cfg.videoQRRecovery,
-			cfg.videoCodec,
-			cfg.videoTileModule,
-			cfg.videoTileRS,
-			cfg.vp8FPS,
-			cfg.vp8BatchSize,
-			cfg.seiFPS,
-			cfg.seiBatchSize,
-			cfg.seiFragmentSize,
-			cfg.seiAckTimeoutMS,
-			cfg.engine,
-			cfg.url,
-			cfg.token,
 		)
 	}()
 

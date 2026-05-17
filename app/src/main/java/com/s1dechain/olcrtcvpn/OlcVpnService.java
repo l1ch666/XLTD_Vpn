@@ -363,26 +363,44 @@ public final class OlcVpnService extends VpnService {
 
     private void scheduleControlledReconnect(String reason, long delayMs, String threadName) {
         if (stopRequested || currentLink == null || currentLink.trim().isEmpty()) return;
+        final int scheduledGeneration;
         synchronized (lock) {
             if (controlledReconnectPending) return;
             controlledReconnectPending = true;
             restartRequested = true;
             tunEstablished = false;
             workerGeneration++;
+            scheduledGeneration = workerGeneration;
         }
 
         sendStatus(reason + ". Полностью пересоздаю olcRTC через " + (delayMs / 1000) + " сек...");
 
         new Thread(() -> {
+            boolean reconnectHandedOff = false;
             try {
+                if (stopRequested || workerGeneration != scheduledGeneration) return;
                 shutdownResources();
                 try { Thread.sleep(delayMs); } catch (InterruptedException ignored) {}
-                if (!stopRequested && currentLink != null) {
+
+                String linkToStart = null;
+                synchronized (lock) {
+                    if (!stopRequested && currentLink != null && workerGeneration == scheduledGeneration) {
+                        linkToStart = currentLink;
+                        controlledReconnectPending = false;
+                        reconnectHandedOff = true;
+                    }
+                }
+
+                if (linkToStart != null) {
                     sendStatus("Переподключаюсь...");
-                    startWorker(currentLink);
+                    startWorker(linkToStart);
                 }
             } finally {
-                controlledReconnectPending = false;
+                if (!reconnectHandedOff) {
+                    synchronized (lock) {
+                        if (workerGeneration == scheduledGeneration) controlledReconnectPending = false;
+                    }
+                }
             }
         }, threadName).start();
     }

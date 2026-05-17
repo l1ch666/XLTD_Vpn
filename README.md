@@ -1,4 +1,4 @@
-# olcRTC Android client — 1.6.1 universal-carrier
+# olcRTC Android client — 1.6.2 universal-carrier
 
 This build updates the Android client for the `openlibrecommunity/olcrtc` `refactor/universal-carrier` branch.
 
@@ -94,6 +94,18 @@ Example:
 ```text
 olcrtc://wbstream?vp8channel<vp8-fps=60&vp8-batch=64&tcp-limit=2&mtu=1040&client-id=default>@019e1742-db64-733a-a991-a570984bdb59#bbb9a2e3613bd4dc93fc88f858e0a4a882b30b55976cb6f408e1f421a9cda9c4$wb-vp8
 ```
+
+## What changed in 1.6.2
+
+- Hardened controlled reconnects for network/core storm events: stale reconnect threads now check the worker generation before shutting resources down or starting a new worker.
+- Updated combo AAR generation for the current universal-carrier Go API, where `client.RunWithReady` now receives `client.Config`.
+- Added a local APK build helper that uses the Android Studio JBR and cached Gradle when plain `gradle` is not on `PATH`:
+
+```powershell
+powershell -ExecutionPolicy Bypass -File scripts/build_apk.ps1
+```
+
+The helper copies the generated APK to `dist/XLTD_Vpn-<version>-debug.apk` for GitHub releases.
 
 ## What changed in 1.6.1
 
