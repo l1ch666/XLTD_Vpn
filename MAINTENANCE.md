@@ -30,7 +30,7 @@ gradle clean :app:assembleDebug
 - Add a short entry to `CHANGELOG.md` before publishing.
 - Keep Windows versioning separate under `windows/XLTD.Vpn.Windows`:
   - Android stable line: `1.6.x-universal-carrier`.
-  - Windows beta line: `0.1.x-beta`.
+  - Windows beta line: `0.2.x-beta`.
   - Shared feature-level changes should move the first/second version numbers in parallel by intent.
   - Small platform-only bugfixes update only the third number for that platform.
 
@@ -42,7 +42,7 @@ Build the Windows GUI and bundled core:
 powershell -ExecutionPolicy Bypass -File scripts/build_windows.ps1
 ```
 
-The helper writes `dist/windows/XLTD_Vpn-Windows-0.1.0-beta-win-x64.zip` and prints SHA256 for the GitHub pre-release.
+The helper writes `dist/windows/XLTD_Vpn-Windows-0.2.0-beta-win-x64.zip` and prints SHA256 for the GitHub pre-release.
 
 ## GitHub publishing
 
@@ -55,5 +55,5 @@ Before publishing:
 3. Build the debug APK with `scripts/build_apk.ps1`.
 4. Build the Windows beta package with `scripts/build_windows.ps1` when a Windows change is included.
 5. Upload Android APKs to stable Android tags such as `v1.6.3`.
-6. Upload Windows beta zips to pre-release Windows tags such as `windows-v0.1.0-beta`.
+6. Upload Windows beta zips to pre-release Windows tags such as `windows-v0.2.0-beta`.
 7. Include the SHA256 printed by each build helper in the release notes.

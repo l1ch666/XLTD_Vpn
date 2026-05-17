@@ -1,5 +1,12 @@
 # Changelog
 
+## Windows 0.2.0-beta
+
+- Restyled the Windows client with softer rounded cards, pill buttons, and a black/white visual direction closer to the Android app.
+- Added an experimental full tunnel mode using bundled `tun2socks.exe` and a Wintun-backed TUN adapter.
+- Added route/DNS setup and rollback for the Windows full tunnel mode.
+- Updated the Windows package to include both `olcrtc.exe` and `tun2socks.exe`.
+
 ## Windows 0.1.0-beta
 
 - Added the first native Windows beta client under `windows/XLTD.Vpn.Windows`.

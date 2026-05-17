@@ -1,4 +1,6 @@
 using System.Drawing;
+using System.Drawing.Drawing2D;
+using XLTD.Vpn.Windows.Controls;
 using XLTD.Vpn.Windows.Models;
 using XLTD.Vpn.Windows.Services;
 
@@ -8,6 +10,7 @@ internal sealed class MainForm : Form
 {
     private readonly ProfileStore profileStore = new();
     private readonly CoreProcessManager core = new();
+    private readonly WindowsTunnelManager tunnel = new();
     private readonly WindowsProxyManager proxy = new();
     private readonly List<Profile> profiles;
 
@@ -17,19 +20,20 @@ internal sealed class MainForm : Form
     private readonly TextBox logBox = new();
     private readonly Label statusLabel = new();
     private readonly Label metaLabel = new();
-    private readonly CheckBox systemProxyBox = new();
-    private readonly Button connectButton = new();
-    private readonly Button saveButton = new();
-    private readonly Button deleteButton = new();
+    private readonly ComboBox routeModeBox = new();
+    private readonly Button connectButton = new PillButton();
+    private readonly Button saveButton = new PillButton();
+    private readonly Button deleteButton = new PillButton();
 
     public MainForm()
     {
         profiles = profileStore.Load();
         Text = $"{AppInfo.ProductName} Windows {AppInfo.WindowsVersion}";
-        MinimumSize = new Size(920, 640);
-        Size = new Size(1040, 720);
+        MinimumSize = new Size(960, 660);
+        Size = new Size(1080, 740);
         StartPosition = FormStartPosition.CenterScreen;
         BackColor = Color.FromArgb(245, 246, 248);
+        Font = new Font("Segoe UI", 10);
 
         BuildUi();
         WireEvents();
@@ -39,6 +43,7 @@ internal sealed class MainForm : Form
 
     protected override void OnFormClosing(FormClosingEventArgs e)
     {
+        tunnel.Dispose();
         proxy.Restore();
         core.Dispose();
         base.OnFormClosing(e);
@@ -51,29 +56,24 @@ internal sealed class MainForm : Form
             Dock = DockStyle.Fill,
             ColumnCount = 2,
             RowCount = 1,
-            Padding = new Padding(18),
+            Padding = new Padding(20),
             BackColor = BackColor
         };
-        root.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 330));
+        root.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 350));
         root.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100));
         Controls.Add(root);
 
         var left = PanelCard();
-        left.Padding = new Padding(14);
+        left.Padding = new Padding(18);
         root.Controls.Add(left, 0, 0);
-
-        var right = new TableLayoutPanel { Dock = DockStyle.Fill, ColumnCount = 1, RowCount = 3 };
-        right.RowStyles.Add(new RowStyle(SizeType.Absolute, 250));
-        right.RowStyles.Add(new RowStyle(SizeType.Absolute, 132));
-        right.RowStyles.Add(new RowStyle(SizeType.Percent, 100));
-        root.Controls.Add(right, 1, 0);
 
         var title = new Label
         {
             Text = "XLTD VPN",
             Dock = DockStyle.Top,
-            Font = new Font("Segoe UI", 22, FontStyle.Bold),
-            Height = 44
+            Font = new Font("Segoe UI", 26, FontStyle.Bold),
+            ForeColor = Color.FromArgb(17, 17, 17),
+            Height = 54
         };
         left.Controls.Add(title);
 
@@ -82,95 +82,143 @@ internal sealed class MainForm : Form
             Text = "Windows beta " + AppInfo.WindowsVersion,
             Dock = DockStyle.Top,
             ForeColor = Color.FromArgb(95, 101, 112),
-            Height = 28
+            Height = 30
         };
         left.Controls.Add(version);
 
         profilesList.Dock = DockStyle.Fill;
         profilesList.IntegralHeight = false;
+        profilesList.BorderStyle = BorderStyle.None;
+        profilesList.BackColor = Color.White;
+        profilesList.DrawMode = DrawMode.OwnerDrawFixed;
+        profilesList.ItemHeight = 70;
         profilesList.Font = new Font("Segoe UI", 10);
         left.Controls.Add(profilesList);
         profilesList.BringToFront();
 
+        var right = new TableLayoutPanel { Dock = DockStyle.Fill, ColumnCount = 1, RowCount = 3 };
+        right.RowStyles.Add(new RowStyle(SizeType.Absolute, 250));
+        right.RowStyles.Add(new RowStyle(SizeType.Absolute, 168));
+        right.RowStyles.Add(new RowStyle(SizeType.Percent, 100));
+        root.Controls.Add(right, 1, 0);
+
+        BuildEditor(right);
+        BuildConnection(right);
+        BuildLogs(right);
+    }
+
+    private void BuildEditor(TableLayoutPanel right)
+    {
         var editor = PanelCard();
-        editor.Padding = new Padding(16);
+        editor.Padding = new Padding(18);
         right.Controls.Add(editor, 0, 0);
 
-        var editorLayout = new TableLayoutPanel { Dock = DockStyle.Fill, RowCount = 4, ColumnCount = 1 };
-        editorLayout.RowStyles.Add(new RowStyle(SizeType.Absolute, 30));
-        editorLayout.RowStyles.Add(new RowStyle(SizeType.Absolute, 38));
-        editorLayout.RowStyles.Add(new RowStyle(SizeType.Percent, 100));
-        editorLayout.RowStyles.Add(new RowStyle(SizeType.Absolute, 42));
-        editor.Controls.Add(editorLayout);
+        var layout = new TableLayoutPanel { Dock = DockStyle.Fill, RowCount = 4, ColumnCount = 1 };
+        layout.RowStyles.Add(new RowStyle(SizeType.Absolute, 30));
+        layout.RowStyles.Add(new RowStyle(SizeType.Absolute, 40));
+        layout.RowStyles.Add(new RowStyle(SizeType.Percent, 100));
+        layout.RowStyles.Add(new RowStyle(SizeType.Absolute, 44));
+        editor.Controls.Add(layout);
 
-        editorLayout.Controls.Add(SectionLabel("Profile"), 0, 0);
+        layout.Controls.Add(SectionLabel("Profile"), 0, 0);
         nameBox.PlaceholderText = "Profile name";
-        nameBox.Dock = DockStyle.Fill;
-        editorLayout.Controls.Add(nameBox, 0, 1);
+        StyleTextBox(nameBox);
+        layout.Controls.Add(nameBox, 0, 1);
+
         linkBox.PlaceholderText = "olcrtc://carrier?transport<params>@room#64hexkey$comment";
         linkBox.Multiline = true;
         linkBox.ScrollBars = ScrollBars.Vertical;
-        linkBox.Dock = DockStyle.Fill;
-        editorLayout.Controls.Add(linkBox, 0, 2);
+        StyleTextBox(linkBox);
+        layout.Controls.Add(linkBox, 0, 2);
 
-        var editorButtons = new FlowLayoutPanel { Dock = DockStyle.Fill, FlowDirection = FlowDirection.RightToLeft };
+        var buttons = new FlowLayoutPanel { Dock = DockStyle.Fill, FlowDirection = FlowDirection.RightToLeft };
         saveButton.Text = "Save";
-        saveButton.Width = 100;
+        saveButton.Width = 108;
+        StylePrimary(saveButton);
         deleteButton.Text = "Delete";
-        deleteButton.Width = 100;
-        var newButton = new Button { Text = "New", Width = 100 };
+        deleteButton.Width = 108;
+        StyleSecondary(deleteButton);
+        var newButton = new PillButton { Text = "New", Width = 108 };
+        StyleSecondary(newButton);
         newButton.Click += (_, _) => ClearEditor();
-        editorButtons.Controls.Add(saveButton);
-        editorButtons.Controls.Add(deleteButton);
-        editorButtons.Controls.Add(newButton);
-        editorLayout.Controls.Add(editorButtons, 0, 3);
+        buttons.Controls.Add(saveButton);
+        buttons.Controls.Add(deleteButton);
+        buttons.Controls.Add(newButton);
+        layout.Controls.Add(buttons, 0, 3);
+    }
 
+    private void BuildConnection(TableLayoutPanel right)
+    {
         var connection = PanelCard();
-        connection.Padding = new Padding(16);
+        connection.Padding = new Padding(18);
         right.Controls.Add(connection, 0, 1);
 
-        var connectionLayout = new TableLayoutPanel { Dock = DockStyle.Fill, ColumnCount = 2, RowCount = 3 };
-        connectionLayout.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100));
-        connectionLayout.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 160));
-        connection.Controls.Add(connectionLayout);
+        var layout = new TableLayoutPanel { Dock = DockStyle.Fill, ColumnCount = 2, RowCount = 4 };
+        layout.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100));
+        layout.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 168));
+        connection.Controls.Add(layout);
 
         statusLabel.Text = "Disconnected";
-        statusLabel.Font = new Font("Segoe UI", 12, FontStyle.Bold);
+        statusLabel.Font = new Font("Segoe UI", 13, FontStyle.Bold);
+        statusLabel.ForeColor = Color.FromArgb(17, 17, 17);
         statusLabel.Dock = DockStyle.Fill;
-        connectionLayout.Controls.Add(statusLabel, 0, 0);
+        layout.Controls.Add(statusLabel, 0, 0);
 
         connectButton.Text = "Connect";
-        connectButton.Height = 38;
         connectButton.Dock = DockStyle.Fill;
-        connectionLayout.Controls.Add(connectButton, 1, 0);
+        StylePrimary(connectButton);
+        layout.Controls.Add(connectButton, 1, 0);
 
-        metaLabel.Text = "Local SOCKS: 127.0.0.1:10808";
+        metaLabel.Text = $"Local SOCKS: {AppInfo.DefaultSocksHost}:{AppInfo.DefaultSocksPort}";
         metaLabel.ForeColor = Color.FromArgb(95, 101, 112);
         metaLabel.Dock = DockStyle.Fill;
-        connectionLayout.Controls.Add(metaLabel, 0, 1);
-        connectionLayout.SetColumnSpan(metaLabel, 2);
+        layout.Controls.Add(metaLabel, 0, 1);
+        layout.SetColumnSpan(metaLabel, 2);
 
-        systemProxyBox.Text = "Use Windows user proxy while connected (beta)";
-        systemProxyBox.Dock = DockStyle.Fill;
-        connectionLayout.Controls.Add(systemProxyBox, 0, 2);
-        connectionLayout.SetColumnSpan(systemProxyBox, 2);
+        routeModeBox.Dock = DockStyle.Fill;
+        routeModeBox.DropDownStyle = ComboBoxStyle.DropDownList;
+        routeModeBox.Items.AddRange(new object[]
+        {
+            "Local SOCKS only",
+            "Windows user proxy (beta)",
+            "Full tunnel / Wintun (admin beta)"
+        });
+        routeModeBox.SelectedIndex = 0;
+        layout.Controls.Add(routeModeBox, 0, 2);
+        layout.SetColumnSpan(routeModeBox, 2);
 
+        var hint = new Label
+        {
+            Text = WindowsTunnelManager.IsAdministrator()
+                ? "Full tunnel is available in this elevated session."
+                : "Full tunnel requires launching the app as Administrator.",
+            ForeColor = Color.FromArgb(120, 126, 136),
+            Dock = DockStyle.Fill
+        };
+        layout.Controls.Add(hint, 0, 3);
+        layout.SetColumnSpan(hint, 2);
+    }
+
+    private void BuildLogs(TableLayoutPanel right)
+    {
         var logs = PanelCard();
-        logs.Padding = new Padding(16);
+        logs.Padding = new Padding(18);
         right.Controls.Add(logs, 0, 2);
 
-        var logsLayout = new TableLayoutPanel { Dock = DockStyle.Fill, RowCount = 2 };
-        logsLayout.RowStyles.Add(new RowStyle(SizeType.Absolute, 28));
-        logsLayout.RowStyles.Add(new RowStyle(SizeType.Percent, 100));
-        logs.Controls.Add(logsLayout);
-        logsLayout.Controls.Add(SectionLabel("Runtime log"), 0, 0);
+        var layout = new TableLayoutPanel { Dock = DockStyle.Fill, RowCount = 2 };
+        layout.RowStyles.Add(new RowStyle(SizeType.Absolute, 30));
+        layout.RowStyles.Add(new RowStyle(SizeType.Percent, 100));
+        logs.Controls.Add(layout);
+        layout.Controls.Add(SectionLabel("Runtime log"), 0, 0);
+
         logBox.Dock = DockStyle.Fill;
         logBox.Multiline = true;
         logBox.ReadOnly = true;
         logBox.ScrollBars = ScrollBars.Vertical;
         logBox.Font = new Font("Consolas", 9);
         logBox.BackColor = Color.White;
-        logsLayout.Controls.Add(logBox, 0, 1);
+        logBox.BorderStyle = BorderStyle.None;
+        layout.Controls.Add(logBox, 0, 1);
     }
 
     private void WireEvents()
@@ -184,12 +232,15 @@ internal sealed class MainForm : Form
                 metaLabel.Text = $"{profile.Carrier} / {profile.Transport} - SOCKS {AppInfo.DefaultSocksHost}:{AppInfo.DefaultSocksPort}";
             }
         };
+        profilesList.DrawItem += DrawProfileItem;
         saveButton.Click += (_, _) => SaveProfile();
         deleteButton.Click += (_, _) => DeleteSelectedProfile();
         connectButton.Click += async (_, _) => await ToggleConnectionAsync();
         core.LogLine += line => Ui(() => AppendLog(line));
+        tunnel.LogLine += line => Ui(() => AppendLog("[tunnel] " + line));
         core.Exited += code => Ui(() =>
         {
+            tunnel.Stop();
             proxy.Restore();
             connectButton.Text = "Connect";
             SetStatus(code.HasValue ? $"Core exited with code {code}" : "Core stopped");
@@ -224,6 +275,7 @@ internal sealed class MainForm : Form
     {
         if (core.IsRunning)
         {
+            tunnel.Stop();
             proxy.Restore();
             core.Stop();
             connectButton.Text = "Connect";
@@ -245,19 +297,24 @@ internal sealed class MainForm : Form
             if (!ready)
             {
                 SetStatus("Core started, SOCKS is not ready yet. Watch log.");
+                return;
             }
-            else
+
+            SetStatus("Connected. Local SOCKS is ready.");
+            if (routeModeBox.SelectedIndex == 1)
             {
-                SetStatus("Connected. Local SOCKS is ready.");
-                if (systemProxyBox.Checked)
-                {
-                    proxy.ApplySocksProxy(AppInfo.DefaultSocksHost, AppInfo.DefaultSocksPort);
-                    SetStatus("Connected. Windows user proxy is enabled.");
-                }
+                proxy.ApplySocksProxy(AppInfo.DefaultSocksHost, AppInfo.DefaultSocksPort);
+                SetStatus("Connected. Windows user proxy is enabled.");
+            }
+            else if (routeModeBox.SelectedIndex == 2)
+            {
+                tunnel.Start(AppInfo.DefaultSocksPort, ResolveMtu(config));
+                SetStatus("Connected. Full tunnel is enabled.");
             }
         }
         catch (Exception ex)
         {
+            tunnel.Stop();
             proxy.Restore();
             core.Stop();
             connectButton.Text = "Connect";
@@ -331,12 +388,44 @@ internal sealed class MainForm : Form
         else action();
     }
 
+    private void DrawProfileItem(object? sender, DrawItemEventArgs e)
+    {
+        if (e.Index < 0 || e.Index >= profilesList.Items.Count) return;
+        e.DrawBackground();
+        var profile = (Profile)profilesList.Items[e.Index];
+        var selected = (e.State & DrawItemState.Selected) == DrawItemState.Selected;
+        var rect = new Rectangle(e.Bounds.X + 4, e.Bounds.Y + 6, e.Bounds.Width - 8, e.Bounds.Height - 10);
+        e.Graphics.SmoothingMode = SmoothingMode.AntiAlias;
+        using var path = UiShapes.RoundedRect(rect, 18);
+        using var fill = new SolidBrush(selected ? Color.FromArgb(17, 17, 17) : Color.FromArgb(245, 246, 248));
+        e.Graphics.FillPath(fill, path);
+
+        var titleColor = selected ? Color.White : Color.FromArgb(17, 17, 17);
+        var metaColor = selected ? Color.FromArgb(215, 219, 226) : Color.FromArgb(95, 101, 112);
+        TextRenderer.DrawText(
+            e.Graphics,
+            string.IsNullOrWhiteSpace(profile.Name) ? "olcRTC profile" : profile.Name,
+            new Font("Segoe UI", 10, FontStyle.Bold),
+            new Rectangle(rect.X + 14, rect.Y + 11, rect.Width - 28, 20),
+            titleColor,
+            TextFormatFlags.EndEllipsis);
+        TextRenderer.DrawText(
+            e.Graphics,
+            $"{profile.Carrier} / {profile.Transport}",
+            new Font("Segoe UI", 8),
+            new Rectangle(rect.X + 14, rect.Y + 36, rect.Width - 28, 18),
+            metaColor,
+            TextFormatFlags.EndEllipsis);
+    }
+
     private static Panel PanelCard()
     {
-        return new Panel
+        return new RoundedPanel
         {
             Dock = DockStyle.Fill,
-            BackColor = Color.White,
+            FillColor = Color.White,
+            BorderColor = Color.FromArgb(232, 234, 238),
+            Radius = 26,
             Margin = new Padding(8)
         };
     }
@@ -350,5 +439,43 @@ internal sealed class MainForm : Form
             ForeColor = Color.FromArgb(95, 101, 112),
             Font = new Font("Segoe UI", 10, FontStyle.Bold)
         };
+    }
+
+    private static void StyleTextBox(TextBox box)
+    {
+        box.Dock = DockStyle.Fill;
+        box.BorderStyle = BorderStyle.FixedSingle;
+        box.BackColor = Color.FromArgb(245, 246, 248);
+        box.ForeColor = Color.FromArgb(17, 17, 17);
+    }
+
+    private static void StylePrimary(Button button)
+    {
+        if (button is PillButton pill)
+        {
+            pill.FillColor = Color.FromArgb(17, 17, 17);
+            pill.HoverColor = Color.FromArgb(35, 35, 35);
+            pill.PressedColor = Color.Black;
+            pill.TextColor = Color.White;
+        }
+    }
+
+    private static void StyleSecondary(Button button)
+    {
+        if (button is PillButton pill)
+        {
+            pill.FillColor = Color.FromArgb(240, 242, 245);
+            pill.HoverColor = Color.FromArgb(226, 229, 235);
+            pill.PressedColor = Color.FromArgb(214, 218, 225);
+            pill.TextColor = Color.FromArgb(17, 17, 17);
+        }
+    }
+
+    private static int ResolveMtu(OlcConfig config)
+    {
+        var visual = config.Transport is OlcUriParser.TransportVp8 or OlcUriParser.TransportSei or OlcUriParser.TransportVideo;
+        var fallback = visual ? 1040 : 1500;
+        var requested = config.IntParam("mtu", fallback);
+        return Math.Max(900, Math.Min(1500, requested));
     }
 }

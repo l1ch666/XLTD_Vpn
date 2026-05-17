@@ -8,11 +8,12 @@ $env:DOTNET_CLI_TELEMETRY_OPTOUT = "1"
 $env:DOTNET_NOLOGO = "1"
 
 $projectRoot = Split-Path -Parent $PSScriptRoot
-$version = "0.1.0-beta"
+$version = "0.2.0-beta"
 $project = Join-Path $projectRoot "windows\XLTD.Vpn.Windows\XLTD.Vpn.Windows.csproj"
 $projectDir = Split-Path -Parent $project
 $toolsDir = Join-Path $projectDir "tools"
 $olcrtcSource = Join-Path $projectRoot ".external\olcrtc"
+$tun2socksSource = Join-Path $projectRoot ".external\tun2socks"
 $distRoot = Join-Path $projectRoot "dist\windows"
 $publishDir = Join-Path $distRoot "XLTD_Vpn_Windows-$version-$Runtime"
 $zipPath = Join-Path $distRoot "XLTD_Vpn-Windows-$version-$Runtime.zip"
@@ -45,6 +46,10 @@ if (-not (Test-Path $olcrtcSource)) {
     throw "Missing local olcrtc source at $olcrtcSource. Rebuild/fetch .external first."
 }
 
+if (-not (Test-Path $tun2socksSource)) {
+    throw "Missing local tun2socks source at $tun2socksSource. Rebuild/fetch .external first."
+}
+
 Reset-Directory $toolsDir
 New-Item -ItemType Directory -Force -Path (Join-Path $toolsDir "data") | Out-Null
 
@@ -54,6 +59,17 @@ try {
     & go build -trimpath -ldflags "-s -w" -o $olcrtcExe ".\cmd\olcrtc"
     if ($LASTEXITCODE -ne 0) {
         throw "go build olcrtc failed with exit code $LASTEXITCODE"
+    }
+} finally {
+    Pop-Location
+}
+
+Push-Location $tun2socksSource
+try {
+    $tun2socksExe = Join-Path $toolsDir "tun2socks.exe"
+    & go build -trimpath -ldflags "-s -w" -o $tun2socksExe "."
+    if ($LASTEXITCODE -ne 0) {
+        throw "go build tun2socks failed with exit code $LASTEXITCODE"
     }
 } finally {
     Pop-Location
