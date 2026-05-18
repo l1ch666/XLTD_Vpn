@@ -116,10 +116,18 @@ index 11f43b8..7a0240a 100644
  
  func (c *kcpConn) Close() error {
 diff --git a/internal/transport/vp8channel/transport.go b/internal/transport/vp8channel/transport.go
-index 80852c9..470f775 100644
+index 80852c9..ee96bc3 100644
 --- a/internal/transport/vp8channel/transport.go
 +++ b/internal/transport/vp8channel/transport.go
-@@ -99,10 +99,12 @@ type streamTransport struct {
+@@ -13,6 +13,7 @@ import (
+ 	"fmt"
+ 	"hash/crc32"
+ 	"hash/fnv"
++	"strings"
+ 	"sync"
+ 	"sync/atomic"
+ 	"time"
+@@ -99,10 +100,12 @@ type streamTransport struct {
  	// localEpoch is bumped on every KCP session restart and stamped into
  	// every outgoing VP8 frame. peerEpoch tracks the last epoch we observed
  	// from the remote so we can detect their restart and reset locally.
@@ -136,7 +144,7 @@ index 80852c9..470f775 100644
  
  	kcp         *kcpRuntime
  	kcpMu       sync.RWMutex
-@@ -162,6 +164,7 @@ func New(ctx context.Context, cfg transport.Config) (transport.Transport, error)
+@@ -162,6 +165,7 @@ func New(ctx context.Context, cfg transport.Config) (transport.Transport, error)
  		batchSize = 1
  	}
  
@@ -144,7 +152,7 @@ index 80852c9..470f775 100644
  	tr := &streamTransport{
  		stream:        stream,
  		track:         track,
-@@ -171,7 +174,8 @@ func New(ctx context.Context, cfg transport.Config) (transport.Transport, error)
+@@ -171,7 +175,8 @@ func New(ctx context.Context, cfg transport.Config) (transport.Transport, error)
  		writerDone:    make(chan struct{}),
  		frameInterval: time.Second / time.Duration(fps),
  		batchSize:     batchSize,
@@ -154,7 +162,7 @@ index 80852c9..470f775 100644
  		localEpoch:    randomEpoch(),
  	}
  
-@@ -183,6 +187,41 @@ func New(ctx context.Context, cfg transport.Config) (transport.Transport, error)
+@@ -183,6 +188,68 @@ func New(ctx context.Context, cfg transport.Config) (transport.Transport, error)
  	return tr, nil
  }
  
@@ -169,15 +177,42 @@ index 80852c9..470f775 100644
 +}
 +
 +func bindingTokens(cfg transport.Config) []uint32 {
-+	tokens := make([]uint32, 0, 3)
++	tokens := make([]uint32, 0, 6)
 +	tokens = appendBindingToken(tokens, bindingID(cfg))
-+	tokens = appendBindingToken(tokens, cfg.RoomURL)
++	tokens = appendRoomBindingTokens(tokens, cfg.Carrier, cfg.RoomURL)
 +	tokens = appendBindingToken(tokens, cfg.ChannelID)
 +	tokens = appendBindingToken(tokens, cfg.DeviceID)
 +	if len(tokens) == 0 {
 +		return []uint32{bindingToken("")}
 +	}
 +	return tokens
++}
++
++func appendRoomBindingTokens(tokens []uint32, carrier, roomURL string) []uint32 {
++	roomURL = strings.TrimSpace(roomURL)
++	tokens = appendBindingToken(tokens, roomURL)
++	if strings.EqualFold(strings.TrimSpace(carrier), "telemost") {
++		tokens = appendBindingToken(tokens, canonicalTelemostRoomURL(roomURL))
++		tokens = appendBindingToken(tokens, bareTelemostRoomID(roomURL))
++	}
++	return tokens
++}
++
++func canonicalTelemostRoomURL(roomURL string) string {
++	roomID := bareTelemostRoomID(roomURL)
++	if roomID == "" || strings.HasPrefix(roomID, "http://") || strings.HasPrefix(roomID, "https://") {
++		return ""
++	}
++	return "https://telemost.yandex.ru/j/" + roomID
++}
++
++func bareTelemostRoomID(roomURL string) string {
++	roomURL = strings.TrimRight(strings.TrimSpace(roomURL), "/")
++	const prefix = "https://telemost.yandex.ru/j/"
++	if strings.HasPrefix(roomURL, prefix) {
++		return strings.TrimRight(strings.TrimPrefix(roomURL, prefix), "/")
++	}
++	return roomURL
 +}
 +
 +func appendBindingToken(tokens []uint32, value string) []uint32 {
@@ -196,7 +231,7 @@ index 80852c9..470f775 100644
  func (p *streamTransport) Connect(ctx context.Context) error {
  	connectCtx, cancel := context.WithTimeout(ctx, defaultConnectTimeout)
  	defer cancel()
-@@ -196,7 +235,7 @@ func (p *streamTransport) Connect(ctx context.Context) error {
+@@ -196,7 +263,7 @@ func (p *streamTransport) Connect(ctx context.Context) error {
  	// would deadlock: muxconn.Write spins on CanSend (which checks kcp!=nil)
  	// and KCP was only started lazily on the first incoming peer frame.
  	p.kcpOnce.Do(func() {
@@ -205,7 +240,7 @@ index 80852c9..470f775 100644
  		if err != nil {
  			logger.Infof("vp8channel: startKCP failed: %v", err)
  			return
-@@ -215,17 +254,35 @@ func (p *streamTransport) Connect(ctx context.Context) error {
+@@ -215,17 +282,35 @@ func (p *streamTransport) Connect(ctx context.Context) error {
  	return nil
  }
  
@@ -244,7 +279,7 @@ index 80852c9..470f775 100644
  func epochCRC(token, epoch uint32) uint32 {
  	var buf [8]byte
  	binary.BigEndian.PutUint32(buf[0:4], token)
-@@ -420,7 +477,7 @@ func (p *streamTransport) resetKCP() {
+@@ -420,7 +505,7 @@ func (p *streamTransport) resetKCP() {
  	// peer-triggered reset, the peer would see a "new" epoch from us, reset
  	// itself, send back its (unchanged) epoch which we'd then see as "new"
  	// again - and the two sides would loop forever tearing down smux.
@@ -253,7 +288,7 @@ index 80852c9..470f775 100644
  	if err != nil {
  		return
  	}
-@@ -533,6 +590,35 @@ func (p *streamTransport) handleFirstPeer(peerEpoch uint32) {
+@@ -533,6 +618,35 @@ func (p *streamTransport) handleFirstPeer(peerEpoch uint32) {
  	logger.Infof("vp8channel: peer first seen epoch=0x%08x", peerEpoch)
  }
  
@@ -289,7 +324,7 @@ index 80852c9..470f775 100644
  // handleIncomingFrame parses the epoch header and either delivers the KCP
  // payload to the local session or triggers a reset when the peer's epoch
  // changes (peer process restart).
-@@ -542,7 +628,7 @@ func (p *streamTransport) handleIncomingFrame(frame []byte) {
+@@ -542,7 +656,7 @@ func (p *streamTransport) handleIncomingFrame(frame []byte) {
  		logger.Debugf("vp8channel: frame header checksum mismatch")
  		return
  	}
@@ -298,7 +333,7 @@ index 80852c9..470f775 100644
  		logger.Debugf("vp8channel: frame token mismatch got=0x%08x want=0x%08x (foreign client or noise)",
  			frameToken, p.bindingToken)
  		return
-@@ -557,6 +643,8 @@ func (p *streamTransport) handleIncomingFrame(frame []byte) {
+@@ -557,6 +671,8 @@ func (p *streamTransport) handleIncomingFrame(frame []byte) {
  		return
  	}
  
@@ -354,7 +389,7 @@ index 78fcf3b..5278906 100644
 +	return binary.BigEndian.Uint32(frame[tokenOff:epochOff])
 +}
 diff --git a/internal/transport/vp8channel/transport_unit_test.go b/internal/transport/vp8channel/transport_unit_test.go
-index 6cd97a5..e3ab412 100644
+index 6cd97a5..72d2243 100644
 --- a/internal/transport/vp8channel/transport_unit_test.go
 +++ b/internal/transport/vp8channel/transport_unit_test.go
 @@ -90,10 +90,10 @@ func (s *fakeEngineSession) SetEndedCallback(cb func(string))  { s.stream.SetEnd
@@ -372,12 +407,13 @@ index 6cd97a5..e3ab412 100644
  func (s *fakeEngineSession) SetVideoTrackHandler(cb func(*webrtc.TrackRemote, *webrtc.RTPReceiver)) {
  	s.stream.SetTrackHandler(cb)
  }
-@@ -230,6 +230,65 @@ func TestEpochHeaderTokenAndOutboundCapacity(t *testing.T) {
+@@ -230,6 +230,99 @@ func TestEpochHeaderTokenAndOutboundCapacity(t *testing.T) {
  	}
  }
  
 +func TestBindingTokensPreferClientIDAndKeepRoomURLFallback(t *testing.T) {
 +	tokens := bindingTokens(transport.Config{
++		Carrier:   "telemost",
 +		RoomURL:   "https://telemost.yandex.ru/j/79061977050409",
 +		ChannelID: "default",
 +		DeviceID:  "ignored-when-channel-is-set",
@@ -388,6 +424,9 @@ index 6cd97a5..e3ab412 100644
 +	if len(tokens) < 2 || tokens[1] != bindingToken("https://telemost.yandex.ru/j/79061977050409") {
 +		t.Fatalf("tokens = %#v, want room URL fallback", tokens)
 +	}
++	if !hasToken(tokens, bindingToken("79061977050409")) {
++		t.Fatalf("tokens = %#v, want bare Telemost room id fallback", tokens)
++	}
 +
 +	tokens = bindingTokens(transport.Config{
 +		RoomURL:  "room",
@@ -396,6 +435,36 @@ index 6cd97a5..e3ab412 100644
 +	if got, want := tokens[0], bindingToken("android-client"); got != want {
 +		t.Fatalf("android primary token = 0x%08x, want device token 0x%08x", got, want)
 +	}
++}
++
++func TestBindingTokensAcceptTelemostBareAndFullRoomForms(t *testing.T) {
++	full := "https://telemost.yandex.ru/j/79061977050409"
++	bare := "79061977050409"
++
++	fromBare := bindingTokens(transport.Config{Carrier: "telemost", RoomURL: bare})
++	if !hasToken(fromBare, bindingToken(full)) {
++		t.Fatalf("tokens from bare room = %#v, want full URL fallback", fromBare)
++	}
++	if !hasToken(fromBare, bindingToken(bare)) {
++		t.Fatalf("tokens from bare room = %#v, want bare room token", fromBare)
++	}
++
++	fromFull := bindingTokens(transport.Config{Carrier: "telemost", RoomURL: full})
++	if !hasToken(fromFull, bindingToken(bare)) {
++		t.Fatalf("tokens from full URL = %#v, want bare room fallback", fromFull)
++	}
++	if !hasToken(fromFull, bindingToken(full)) {
++		t.Fatalf("tokens from full URL = %#v, want full URL token", fromFull)
++	}
++}
++
++func hasToken(tokens []uint32, want uint32) bool {
++	for _, token := range tokens {
++		if token == want {
++			return true
++		}
++	}
++	return false
 +}
 +
 +func TestIncomingRoomURLFallbackPinsOutgoingToken(t *testing.T) {

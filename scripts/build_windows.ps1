@@ -8,12 +8,16 @@ $env:DOTNET_CLI_TELEMETRY_OPTOUT = "1"
 $env:DOTNET_NOLOGO = "1"
 
 $projectRoot = Split-Path -Parent $PSScriptRoot
-$version = "0.2.1-beta"
+$version = "0.3.0-beta"
 $project = Join-Path $projectRoot "windows\XLTD.Vpn.Windows\XLTD.Vpn.Windows.csproj"
 $projectDir = Split-Path -Parent $project
 $toolsDir = Join-Path $projectDir "tools"
 $olcrtcSource = Join-Path $projectRoot ".external\olcrtc"
 $tun2socksSource = Join-Path $projectRoot ".external\tun2socks"
+$ffmpegCacheDir = Join-Path $projectRoot ".external\ffmpeg"
+$ffmpegZip = Join-Path $ffmpegCacheDir "ffmpeg-release-essentials.zip"
+$ffmpegExtractDir = Join-Path $ffmpegCacheDir "extract"
+$ffmpegUrl = "https://www.gyan.dev/ffmpeg/builds/ffmpeg-release-essentials.zip"
 $olcrtcPatch = Join-Path $projectRoot "patches\olcrtc-vp8-legacy-binding.patch"
 $distRoot = Join-Path $projectRoot "dist\windows"
 $publishDir = Join-Path $distRoot "XLTD_Vpn_Windows-$version-$Runtime"
@@ -33,6 +37,38 @@ function Reset-Directory([string]$Path) {
         Remove-Item -LiteralPath $Path -Recurse -Force
     }
     New-Item -ItemType Directory -Force -Path $Path | Out-Null
+}
+
+function Resolve-Ffmpeg {
+    if ($env:FFMPEG_PATH -and (Test-Path $env:FFMPEG_PATH)) {
+        return (Resolve-Path $env:FFMPEG_PATH).Path
+    }
+
+    $command = Get-Command ffmpeg -ErrorAction SilentlyContinue
+    if ($command -and $command.Source -and (Test-Path $command.Source)) {
+        return $command.Source
+    }
+
+    $cached = Join-Path $ffmpegCacheDir "ffmpeg.exe"
+    if (Test-Path $cached) {
+        return $cached
+    }
+
+    New-Item -ItemType Directory -Force -Path $ffmpegCacheDir | Out-Null
+    if (-not (Test-Path $ffmpegZip)) {
+        Write-Host "Downloading ffmpeg for videochannel support..."
+        Invoke-WebRequest -Uri $ffmpegUrl -OutFile $ffmpegZip
+    }
+
+    Reset-Directory $ffmpegExtractDir
+    Expand-Archive -LiteralPath $ffmpegZip -DestinationPath $ffmpegExtractDir -Force
+    $ffmpeg = Get-ChildItem -Path $ffmpegExtractDir -Recurse -Filter ffmpeg.exe | Select-Object -First 1
+    if (-not $ffmpeg) {
+        throw "Downloaded ffmpeg archive did not contain ffmpeg.exe"
+    }
+
+    Copy-Item $ffmpeg.FullName $cached -Force
+    return $cached
 }
 
 function Apply-GitPatchIfNeeded([string]$Repo, [string]$Patch) {
@@ -58,7 +94,7 @@ function Apply-GitPatchIfNeeded([string]$Repo, [string]$Patch) {
 
         $previousErrorActionPreference = $ErrorActionPreference
         $ErrorActionPreference = "Continue"
-        & git apply --reverse --check $Patch *> $null
+        & git apply --reverse --check --ignore-space-change --ignore-whitespace $Patch *> $null
         $reverseCode = $LASTEXITCODE
         $ErrorActionPreference = $previousErrorActionPreference
         if ($reverseCode -eq 0) {
@@ -90,6 +126,8 @@ if (-not (Test-Path $tun2socksSource)) {
 
 Apply-GitPatchIfNeeded $olcrtcSource $olcrtcPatch
 
+$ffmpegSource = Resolve-Ffmpeg
+
 Reset-Directory $toolsDir
 New-Item -ItemType Directory -Force -Path (Join-Path $toolsDir "data") | Out-Null
 
@@ -117,6 +155,7 @@ try {
 
 Copy-Item (Join-Path $olcrtcSource "data\names") (Join-Path $toolsDir "data\names") -Force
 Copy-Item (Join-Path $olcrtcSource "data\surnames") (Join-Path $toolsDir "data\surnames") -Force
+Copy-Item $ffmpegSource (Join-Path $toolsDir "ffmpeg.exe") -Force
 
 Reset-Directory $publishDir
 

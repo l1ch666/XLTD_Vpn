@@ -52,7 +52,7 @@ apply_olcrtc_patch() {
   if git -C "${OLC_DIR}" apply --check "${patch}" >/dev/null 2>&1; then
     echo "Applying local olcRTC compatibility patch: ${patch}"
     git -C "${OLC_DIR}" apply "${patch}"
-  elif git -C "${OLC_DIR}" apply --reverse --check "${patch}" >/dev/null 2>&1; then
+  elif git -C "${OLC_DIR}" apply --reverse --check --ignore-space-change --ignore-whitespace "${patch}" >/dev/null 2>&1; then
     echo "Local olcRTC compatibility patch already applied."
   else
     echo "ERROR: local olcRTC compatibility patch does not apply cleanly: ${patch}" >&2
@@ -1029,10 +1029,7 @@ func validateStartArgs(carrierName, roomID, clientID, keyHex string) error {
 func buildRoomURL(carrierName, roomID string) string {
 	switch carrierName {
 	case "telemost":
-		if strings.HasPrefix(roomID, "http://") || strings.HasPrefix(roomID, "https://") {
-			return roomID
-		}
-		return "https://telemost.yandex.ru/j/" + roomID
+		return roomID
 	case carrierJazz:
 		if roomID == "" {
 			return roomURLAny

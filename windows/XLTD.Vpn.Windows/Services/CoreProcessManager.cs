@@ -151,6 +151,10 @@ internal sealed class CoreProcessManager : IDisposable
         sb.AppendLine("  timeout: 5s");
         sb.AppendLine("  failures: 3");
         AppendTransportOptions(sb, config);
+        if (config.Transport == OlcUriParser.TransportVideo)
+        {
+            sb.AppendLine($"ffmpeg: {Yaml(ResolveToolPath("ffmpeg.exe"))}");
+        }
         sb.AppendLine($"data: {Yaml(dataDir)}");
         sb.AppendLine("debug: false");
         return sb.ToString();

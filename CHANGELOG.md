@@ -1,5 +1,18 @@
 # Changelog
 
+## 1.7.0-universal-carrier
+
+- Fixed `vp8channel` startup when one side hashes a bare Telemost room id and the other side hashes the canonical `https://telemost.yandex.ru/j/...` URL.
+- Kept the legacy `%clientId` / `-client-id` binding compatibility from 1.6.4 and added Telemost room-id/full-URL regression coverage.
+- Updated the Android combo bridge so Telemost room ids are passed to olcRTC in the same raw form as Windows/server YAML.
+- Added explicit Android runtime diagnostics for `videochannel`: URI parsing remains universal-carrier compatible, but this APK requires an ffmpeg-backed Android core for videochannel runtime.
+
+## Windows 0.3.0-beta
+
+- Rebuilt the bundled Windows core with the same Telemost bare-id/full-URL `vp8channel` binding compatibility.
+- Bundled `ffmpeg.exe` in the Windows package so `videochannel` can start instead of exiting with `new encoder: ffmpeg is required for videochannel`.
+- Hardened Windows/Android build helpers so an already-applied local olcRTC patch is detected even when the external checkout has Windows line endings.
+
 ## 1.6.4-universal-carrier
 
 - Fixed VP8 channel compatibility with legacy `%clientId` / `-client-id` links while keeping the newer room-URL binding fallback.

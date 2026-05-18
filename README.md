@@ -1,4 +1,4 @@
-# olcRTC Android client — 1.6.4 universal-carrier
+# olcRTC Android client - 1.7.0 universal-carrier
 
 This build updates the Android client for the `openlibrecommunity/olcrtc` `refactor/universal-carrier` branch.
 
@@ -12,7 +12,7 @@ The repository now also contains a separate Windows beta client:
 windows/XLTD.Vpn.Windows
 ```
 
-Windows uses its own version line. Current Windows beta: `0.2.1-beta`. Build it with:
+Windows uses its own version line. Current Windows beta: `0.3.0-beta`. Build it with:
 
 ```powershell
 powershell -ExecutionPolicy Bypass -File scripts/build_windows.ps1
@@ -33,7 +33,8 @@ Reality check for Android VPN mode:
 
 - `datachannel` is still the fastest when the carrier supports it.
 - `vp8channel` is the main stable media transport for `telemost` / `wbstream`.
-- `seichannel` and `videochannel` are accepted and passed into the new core, but they are still more experimental on Android because they are media/video-based and can be slower or more fragile under full-TUN traffic bursts.
+- `seichannel` is accepted and passed into the new Android core, but it is still more experimental under full-TUN traffic bursts.
+- `videochannel` links parse correctly on Android, but this APK does not bundle an ffmpeg-backed Android video core yet. Windows 0.3.0-beta bundles `ffmpeg.exe` for `videochannel`.
 
 ## URI support
 
@@ -66,6 +67,10 @@ For `vp8channel`, the bundled core now probes both binding schemes during
 startup: legacy `%clientId` / `-client-id` and the newer room-based token. It
 pins to the first valid peer token it receives, which keeps compatibility while
 avoiding duplicate traffic after the peer is detected.
+
+Telemost room ids are also normalized both ways for VP8 binding: a peer using
+`25000437143020` and a peer using
+`https://telemost.yandex.ru/j/25000437143020` will accept each other.
 
 ## Transport params
 
@@ -118,6 +123,14 @@ Example:
 ```text
 olcrtc://wbstream?vp8channel<vp8-fps=60&vp8-batch=64&tcp-limit=2&mtu=1040&client-id=default>@019e1742-db64-733a-a991-a570984bdb59#bbb9a2e3613bd4dc93fc88f858e0a4a882b30b55976cb6f408e1f421a9cda9c4$wb-vp8
 ```
+
+## What changed in 1.7.0
+
+- Fixed a VP8/KCP startup timeout where Android, Windows, or server YAML could hash different Telemost room forms (`roomId` vs full Telemost URL).
+- Kept legacy `%clientId` compatibility while adding Telemost room-id/full-URL fallback tokens.
+- Updated the combo AAR generator so Android passes Telemost room ids in the same raw form as Windows/server configs.
+- Windows beta 0.3.0 now packages `ffmpeg.exe`, so `videochannel` no longer exits with `new encoder: ffmpeg is required for videochannel`.
+- Android now reports a clear runtime error for `videochannel` until an ffmpeg-backed Android core is packaged.
 
 ## What changed in 1.6.4
 

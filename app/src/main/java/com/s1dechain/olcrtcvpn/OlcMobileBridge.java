@@ -153,6 +153,9 @@ public final class OlcMobileBridge {
         if (!OlcUriParser.isSupportedTransport(config.transport)) {
             throw new IllegalArgumentException("unsupported transport in Android build: " + config.transport);
         }
+        if (OlcUriParser.TRANSPORT_VIDEO.equals(config.transport)) {
+            throw new IllegalArgumentException("videochannel requires an ffmpeg-backed native Android core; this APK supports datachannel, vp8channel and seichannel");
+        }
 
         String transport = config.transport;
         boolean transportApplied = setTransportIfAvailable(transport);

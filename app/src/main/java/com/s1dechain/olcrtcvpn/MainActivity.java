@@ -758,6 +758,7 @@ public final class MainActivity extends Activity {
     private String humanError(String raw) {
         String s = raw == null ? "" : raw.toLowerCase();
 
+        if (s.contains("videochannel") && s.contains("ffmpeg")) return "videochannel требует нативный core с ffmpeg. В этой Android-сборке используй vp8channel или seichannel.";
         if ((s.contains("seichannel") || s.contains("videochannel")) && (s.contains("setseioptions") || s.contains("setvideooptions") || s.contains("startwithtransport") || s.contains("combo aar"))) return "Нужен свежий combo AAR с поддержкой universal-carrier. Собери scripts/build_combo_aar.sh и пересобери APK.";
         if (s.contains("only datachannel") || s.contains("use datachannel")) return "Эта ссылка не поддерживается этой сборкой. Используй datachannel или vp8channel.";
         if (s.contains("vp8channel") && (s.contains("no startwithtransport") || s.contains("settransport") || s.contains("rebuild app/libs/olcrtccombo.aar"))) return "Нужен свежий combo AAR с поддержкой vp8channel. Собери scripts/build_combo_aar.sh и пересобери APK.";
