@@ -2,8 +2,8 @@
 
 Windows is versioned separately from Android.
 
-- Android current line: `1.7.x-universal-carrier`
-- Windows beta line: `0.3.x-beta`
+- Android current line: `1.8.x-universal-carrier`
+- Windows beta line: `0.4.x-beta`
 
 The current Windows beta keeps the conservative local SOCKS/proxy path and adds an experimental full tunnel path:
 
@@ -15,6 +15,7 @@ The current Windows beta keeps the conservative local SOCKS/proxy path and adds 
 - Optional Windows user proxy mode while connected. It stores the previous proxy settings and restores them on stop/exit.
 - Experimental full tunnel mode through bundled `tun2socks.exe` and a Wintun-backed adapter. This mode requires launching the app as Administrator.
 - Bundled `ffmpeg.exe` for `videochannel` profiles.
+- Experimental `mtslink` carrier profiles over H.264 `videochannel`.
 
 The beta does not install a permanent Windows service. Full tunnel route/DNS setup is applied at connect time and rolled back at stop/exit. If a carrier reconnect loops through the tunnel on a specific network, switch back to local SOCKS or user proxy mode for that profile until the next tunnel hardening pass.
 
@@ -27,7 +28,7 @@ powershell -ExecutionPolicy Bypass -File scripts/build_windows.ps1
 Output:
 
 ```text
-dist/windows/XLTD_Vpn-Windows-0.3.0-beta-win-x64.zip
+dist/windows/XLTD_Vpn-Windows-0.4.0-beta-win-x64.zip
 ```
 
 The package contains:
@@ -49,7 +50,7 @@ powershell -ExecutionPolicy Bypass -File scripts/build_windows.ps1 -SelfContaine
 
 Feature parity changes should move Android and Windows in parallel by intent, but each platform keeps its own patch number:
 
-- Android: `1.7.0`, `1.8.0`, etc.
-- Windows: `0.3.0-beta`, `0.4.0-beta`, etc.
+- Android: `1.8.0`, `1.9.0`, etc.
+- Windows: `0.4.0-beta`, `0.5.0-beta`, etc.
 
 Small platform-only bugfixes update only the platform they touch.

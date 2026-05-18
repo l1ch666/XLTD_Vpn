@@ -1,0 +1,999 @@
+diff --git a/internal/app/session/session.go b/internal/app/session/session.go
+index e9b3226..e4c817f 100644
+--- a/internal/app/session/session.go
++++ b/internal/app/session/session.go
+@@ -64,7 +64,7 @@ var (
+ 	ErrAmountRequired = errors.New("amount required for gen mode (set gen.amount)")
+ 	// ErrAuthRequired indicates that no auth provider was selected.
+ 	ErrAuthRequired = errors.New(
+-		"auth provider required (set auth.provider to jitsi, telemost, jazz, wbstream or none)")
++		"auth provider required (set auth.provider to jitsi, telemost, jazz, wbstream, mtslink or none)")
+ 	// ErrURLRequired indicates that auth.url must be provided when the auth provider has no default URL.
+ 	ErrURLRequired = errors.New("SFU URL required (set auth.url)")
+ 	// ErrUnsupportedCarrier indicates that carrier is not registered.
+diff --git a/internal/auth/mtslink/client.go b/internal/auth/mtslink/client.go
+new file mode 100644
+index 0000000..c52b015
+--- /dev/null
++++ b/internal/auth/mtslink/client.go
+@@ -0,0 +1,390 @@
++package mtslink
++
++import (
++	"bytes"
++	"context"
++	"encoding/json"
++	"errors"
++	"fmt"
++	"io"
++	"net/http"
++	"net/http/cookiejar"
++	"net/url"
++	"strings"
++	"time"
++)
++
++const (
++	ExtraSessionID    = "sessionID"
++	ExtraEventID      = "eventID"
++	ExtraUserID       = "userID"
++	ExtraJoinToken    = "joinToken"
++	ExtraPublishToken = "publishToken"
++	ExtraConferenceID = "conferenceID"
++	ExtraRoomURL      = "roomURL"
++	ExtraDID          = "did"
++	ExtraPID          = "pid"
++)
++
++type Client struct {
++	HTTP      *http.Client
++	Cookie    string
++	UA        string
++	GuestName string
++}
++
++type Bootstrap struct {
++	Room         RoomInfo
++	UserID       string
++	JoinToken    string
++	PublishToken string
++	ConferenceID string
++	DID          string
++	PID          string
++	Raw          map[string]any
++}
++
++func NewClient(cookie string) *Client {
++	jar, _ := cookiejar.New(nil)
++	return &Client{
++		HTTP:   &http.Client{Timeout: 20 * time.Second, Jar: jar},
++		Cookie: strings.TrimSpace(cookie),
++		UA:     "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 Chrome/148 Safari/537.36",
++	}
++}
++
++func (c *Client) req(ctx context.Context, method, urlStr, ctype string, body io.Reader) (*http.Response, error) {
++	req, err := http.NewRequestWithContext(ctx, method, urlStr, body)
++	if err != nil {
++		return nil, err
++	}
++	req.Header.Set("User-Agent", c.UA)
++	req.Header.Set("Accept", "application/json, text/plain, */*")
++	req.Header.Set("Accept-Language", "ru-RU,ru;q=0.9,en-US;q=0.8,en;q=0.7")
++	req.Header.Set("Origin", "https://my.mts-link.ru")
++	req.Header.Set("Referer", "https://my.mts-link.ru/")
++	req.Header.Set("X-Requested-With", "XMLHttpRequest")
++	if ctype != "" {
++		req.Header.Set("Content-Type", ctype)
++	}
++	if c.Cookie != "" {
++		req.Header.Set("Cookie", c.Cookie)
++	}
++	return c.HTTP.Do(req)
++}
++
++func (c *Client) jsonGET(ctx context.Context, urlStr string) (map[string]any, int, error) {
++	resp, err := c.req(ctx, http.MethodGet, urlStr, "", nil)
++	if err != nil {
++		return nil, 0, err
++	}
++	defer resp.Body.Close()
++	body, _ := io.ReadAll(resp.Body)
++	if resp.StatusCode < 200 || resp.StatusCode > 299 {
++		return nil, resp.StatusCode, fmt.Errorf("GET %s: status=%d body=%s", urlStr, resp.StatusCode, string(body[:min(len(body), 512)]))
++	}
++	var out map[string]any
++	if err := json.Unmarshal(body, &out); err != nil {
++		out = map[string]any{"_raw": string(body)}
++	}
++	return out, resp.StatusCode, nil
++}
++
++func (c *Client) Bootstrap(ctx context.Context, roomURL, explicitUserID, explicitJoin, explicitPublish string) (Bootstrap, error) {
++	room, err := ParseRoom(roomURL)
++	if err != nil {
++		return Bootstrap{}, err
++	}
++	b := Bootstrap{Room: room, UserID: explicitUserID, JoinToken: explicitJoin, PublishToken: explicitPublish}
++	b.DID = RandHex(8)
++	b.PID = RandHex(8)
++	b.Raw = map[string]any{}
++
++	resolved, err := c.ResolveRoom(ctx, roomURL, room)
++	if err == nil {
++		room = resolved
++		b.Room = resolved
++	} else if room.SessionID == "" {
++		return b, err
++	}
++	b.Raw["resolvedRoom"] = room
++
++	if cached, _, err := c.jsonGET(ctx, fmt.Sprintf("https://gw.mts-link.ru/api/eventsessions/%s/cached", room.SessionID)); err == nil {
++		b.Raw["cached"] = cached
++		if b.UserID == "" {
++			b.UserID = firstMeaningfulString(cached, "userId", "userID", "participantId", "id")
++		}
++	}
++
++	if conn, _, err := c.postJSON(ctx,
++		fmt.Sprintf("https://gw.mts-link.ru/api/eventsessions/%s/connections", room.SessionID),
++		map[string]any{"name": c.GuestName, "userName": c.GuestName, "platform": "Web", "referrer": roomURL},
++	); err == nil {
++		b.Raw["connection"] = conn
++		if b.UserID == "" {
++			b.UserID = firstMeaningfulString(conn, "userId", "userID", "participantId", "participationId", "id")
++		}
++	} else if conn, _, err2 := c.postJSON(ctx, fmt.Sprintf("https://gw.mts-link.ru/api/eventsessions/%s/connections", room.SessionID), map[string]any{}); err2 == nil {
++		b.Raw["connection"] = conn
++		if b.UserID == "" {
++			b.UserID = firstMeaningfulString(conn, "userId", "userID", "participantId", "participationId", "id")
++		}
++	} else {
++		b.Raw["connectionError"] = err.Error()
++	}
++
++	if b.UserID == "" {
++		b.UserID = "guest-" + RandHex(4)
++	}
++
++	jt, _, err := c.jsonGET(ctx, fmt.Sprintf("https://gw.mts-link.ru/api/eventsessions/%s/join-token", room.SessionID))
++	if err == nil {
++		b.Raw["joinTokenResponse"] = jt
++		if b.JoinToken == "" {
++			b.JoinToken = findFirstKey(jt, "joinToken", "join_token", "token", "value")
++		}
++		if b.PublishToken == "" {
++			b.PublishToken = findFirstKey(jt, "publishToken", "publish_token", "publish")
++		}
++	} else if b.JoinToken == "" {
++		return b, fmt.Errorf("mtslink: guest join-token failed and no join token was provided: %w", err)
++	}
++
++	conf, _, err := c.postForm(ctx,
++		fmt.Sprintf("https://gw.mts-link.ru/api/eventsessions/%s/conferences", room.SessionID),
++		url.Values{"hasAudio": {"false"}, "hasVideo": {"false"}, "name": {c.GuestName}, "userName": {c.GuestName}},
++	)
++	if err == nil {
++		b.ConferenceID = firstString(conf, "id", "conferenceId")
++		b.Raw["conference"] = conf
++		if b.UserID == "" || strings.HasPrefix(b.UserID, "guest-") {
++			if v := firstMeaningfulString(conf, "userId", "userID", "participantId", "participationId"); v != "" {
++				b.UserID = v
++			}
++		}
++		if b.PublishToken == "" {
++			b.PublishToken = findFirstKey(conf, "publishToken", "publish_token", "publish")
++		}
++	} else {
++		b.Raw["conferenceError"] = err.Error()
++	}
++
++	if b.JoinToken == "" {
++		return b, errors.New("mtslink: join token not found automatically in guest flow")
++	}
++	if b.PublishToken == "" {
++		return b, errors.New("mtslink: publish token not found automatically in guest flow")
++	}
++	return b, nil
++}
++
++func (c *Client) ResolveRoom(ctx context.Context, roomURL string, room RoomInfo) (RoomInfo, error) {
++	if room.SessionID != "" {
++		return room, nil
++	}
++	resp, err := c.req(ctx, http.MethodGet, roomURL, "", nil)
++	if err == nil {
++		_ = resp.Body.Close()
++		if resp.Request != nil && resp.Request.URL != nil && resp.Request.URL.String() != roomURL {
++			if r2, e := ParseRoom(resp.Request.URL.String()); e == nil && r2.SessionID != "" {
++				if r2.EventID == "" {
++					r2.EventID = room.EventID
++				}
++				if r2.UserID == "" {
++					r2.UserID = room.UserID
++				}
++				return r2, nil
++			}
++		}
++	}
++
++	candidates := []string{
++		fmt.Sprintf("https://gw.mts-link.ru/api/eventsessions/%s/cached", room.EventID),
++		fmt.Sprintf("https://gw.mts-link.ru/api/eventsessions/%s", room.EventID),
++		fmt.Sprintf("https://gw.mts-link.ru/api/events/%s", room.EventID),
++		fmt.Sprintf("https://gw.mts-link.ru/api/users/%s/events/%s", room.UserID, room.EventID),
++	}
++	for _, u := range candidates {
++		js, _, err := c.jsonGET(ctx, u)
++		if err != nil {
++			continue
++		}
++		if sid := findFirstKey(js, "eventSessionId", "eventsessionId", "sessionId", "currentSessionId", "activeSessionId", "id"); sid != "" && sid != room.EventID {
++			room.SessionID = sid
++			return room, nil
++		}
++	}
++	return room, fmt.Errorf("mtslink: cannot resolve event session id from %q; pass a /stream-new/{sessionId} URL", roomURL)
++}
++
++func (c *Client) JoinSFU(ctx context.Context, b Bootstrap, offerSDP string, name string) (answer string, peerID string, err error) {
++	q := url.Values{}
++	q.Set("userId", b.UserID)
++	q.Set("joinToken", b.JoinToken)
++	q.Set("disableRecording", "false")
++	q.Set("userName", name)
++	q.Set("publishToken", b.PublishToken)
++	q.Set("twcc", "true")
++	q.Set("originMid", "0")
++	q.Set("did", b.DID)
++	q.Set("pid", b.PID)
++	u := fmt.Sprintf("https://sfu.mts-link.ru/rtc/room/%s/join?%s", b.Room.SessionID, q.Encode())
++	resp, err := c.req(ctx, http.MethodPost, u, "application/sdp", bytes.NewBufferString(offerSDP))
++	if err != nil {
++		return "", "", err
++	}
++	defer resp.Body.Close()
++	body, _ := io.ReadAll(resp.Body)
++	if resp.StatusCode < 200 || resp.StatusCode > 299 {
++		return "", "", fmt.Errorf("mtslink: SFU join status=%d body=%s", resp.StatusCode, string(body[:min(len(body), 1024)]))
++	}
++	answer = string(body)
++	peerID = ParsePeerIDFromSDP(answer)
++	return answer, peerID, nil
++}
++
++func (c *Client) Pin(ctx context.Context, peerID string) error {
++	if peerID == "" {
++		return nil
++	}
++	u := fmt.Sprintf("https://sfu.mts-link.ru/rtc/peer/%s/pin", peerID)
++	resp, err := c.req(ctx, http.MethodPost, u, "application/json", strings.NewReader(`{"streams":[""]}`))
++	if err != nil {
++		return err
++	}
++	defer resp.Body.Close()
++	if resp.StatusCode < 200 || resp.StatusCode > 299 {
++		return fmt.Errorf("mtslink: pin status=%d", resp.StatusCode)
++	}
++	return nil
++}
++
++func (c *Client) AudioVideoControl(ctx context.Context, conferenceID string, hasVideo bool) error {
++	if conferenceID == "" {
++		return nil
++	}
++	u := fmt.Sprintf("https://gw.mts-link.ru/api/conferences/%s/audioVideoControl", conferenceID)
++	body := fmt.Sprintf(`{"hasAudio":false,"hasVideo":%v,"syncVersion":1}`, hasVideo)
++	resp, err := c.req(ctx, http.MethodPost, u, "application/json", strings.NewReader(body))
++	if err != nil {
++		return err
++	}
++	defer resp.Body.Close()
++	if resp.StatusCode < 200 || resp.StatusCode > 299 {
++		return fmt.Errorf("mtslink: audioVideoControl status=%d", resp.StatusCode)
++	}
++	return nil
++}
++
++func (c *Client) postForm(ctx context.Context, urlStr string, vals url.Values) (map[string]any, int, error) {
++	resp, err := c.req(ctx, http.MethodPost, urlStr, "application/x-www-form-urlencoded", strings.NewReader(vals.Encode()))
++	if err != nil {
++		return nil, 0, err
++	}
++	defer resp.Body.Close()
++	body, _ := io.ReadAll(resp.Body)
++	if resp.StatusCode < 200 || resp.StatusCode > 299 {
++		return nil, resp.StatusCode, fmt.Errorf("POST %s: status=%d body=%s", urlStr, resp.StatusCode, string(body[:min(len(body), 512)]))
++	}
++	var out map[string]any
++	if err := json.Unmarshal(body, &out); err != nil {
++		out = map[string]any{"_raw": string(body)}
++	}
++	return out, resp.StatusCode, nil
++}
++
++func (c *Client) postJSON(ctx context.Context, urlStr string, v any) (map[string]any, int, error) {
++	buf, _ := json.Marshal(v)
++	resp, err := c.req(ctx, http.MethodPost, urlStr, "application/json", bytes.NewReader(buf))
++	if err != nil {
++		return nil, 0, err
++	}
++	defer resp.Body.Close()
++	body, _ := io.ReadAll(resp.Body)
++	if resp.StatusCode < 200 || resp.StatusCode > 299 {
++		return nil, resp.StatusCode, fmt.Errorf("POST %s: status=%d body=%s", urlStr, resp.StatusCode, string(body[:min(len(body), 512)]))
++	}
++	var out map[string]any
++	if err := json.Unmarshal(body, &out); err != nil {
++		out = map[string]any{"_raw": string(body)}
++	}
++	return out, resp.StatusCode, nil
++}
++
++func ParsePeerIDFromSDP(sdp string) string {
++	for _, line := range strings.Split(sdp, "\n") {
++		line = strings.TrimSpace(line)
++		if strings.HasPrefix(line, "s=") {
++			v := strings.TrimPrefix(line, "s=")
++			if v != "-" && len(v) > 8 {
++				return v
++			}
++		}
++	}
++	return ""
++}
++
++func firstString(m map[string]any, keys ...string) string {
++	for _, k := range keys {
++		if v, ok := m[k]; ok {
++			switch x := v.(type) {
++			case string:
++				return x
++			case float64:
++				return fmt.Sprintf("%.0f", x)
++			}
++		}
++	}
++	return ""
++}
++
++func findFirstKey(v any, keys ...string) string {
++	want := map[string]bool{}
++	for _, k := range keys {
++		want[strings.ToLower(k)] = true
++	}
++	var walk func(any) string
++	walk = func(x any) string {
++		switch t := x.(type) {
++		case map[string]any:
++			for k, v := range t {
++				if want[strings.ToLower(k)] {
++					switch vv := v.(type) {
++					case string:
++						return vv
++					case float64:
++						return fmt.Sprintf("%.0f", vv)
++					}
++				}
++			}
++			for _, v := range t {
++				if r := walk(v); r != "" {
++					return r
++				}
++			}
++		case []any:
++			for _, v := range t {
++				if r := walk(v); r != "" {
++					return r
++				}
++			}
++		}
++		return ""
++	}
++	return walk(v)
++}
++
++func firstMeaningfulString(m map[string]any, keys ...string) string {
++	v := findFirstKey(m, keys...)
++	if v == "" || v == "0" || strings.EqualFold(v, "null") {
++		return ""
++	}
++	return v
++}
++
++func min(a, b int) int {
++	if a < b {
++		return a
++	}
++	return b
++}
+diff --git a/internal/auth/mtslink/mtslink.go b/internal/auth/mtslink/mtslink.go
+new file mode 100644
+index 0000000..bcf9446
+--- /dev/null
++++ b/internal/auth/mtslink/mtslink.go
+@@ -0,0 +1,58 @@
++package mtslink
++
++import (
++	"context"
++	"fmt"
++	"os"
++	"strings"
++
++	"github.com/openlibrecommunity/olcrtc/internal/auth"
++)
++
++const defaultServiceURL = "https://my.mts-link.ru"
++
++type Provider struct{}
++
++func (Provider) Engine() string { return "mtslink" }
++
++func (Provider) DefaultServiceURL() string { return defaultServiceURL }
++
++func (Provider) Issue(ctx context.Context, cfg auth.Config) (auth.Credentials, error) {
++	roomURL := strings.TrimSpace(cfg.RoomURL)
++	if roomURL == "" {
++		return auth.Credentials{}, auth.ErrRoomIDRequired
++	}
++	if !strings.Contains(roomURL, "://") {
++		roomURL = "https://" + strings.TrimPrefix(roomURL, "//")
++	}
++
++	client := NewClient(os.Getenv("MTS_COOKIE"))
++	client.GuestName = cfg.Name
++	if client.GuestName == "" {
++		client.GuestName = "olcrtc-mtslink"
++	}
++
++	bootstrap, err := client.Bootstrap(ctx, roomURL, "", "", "")
++	if err != nil {
++		return auth.Credentials{}, fmt.Errorf("mtslink bootstrap: %w", err)
++	}
++	return auth.Credentials{
++		URL:   defaultServiceURL,
++		Token: bootstrap.JoinToken,
++		Extra: map[string]string{
++			ExtraSessionID:    bootstrap.Room.SessionID,
++			ExtraEventID:      bootstrap.Room.EventID,
++			ExtraUserID:       bootstrap.UserID,
++			ExtraJoinToken:    bootstrap.JoinToken,
++			ExtraPublishToken: bootstrap.PublishToken,
++			ExtraConferenceID: bootstrap.ConferenceID,
++			ExtraRoomURL:      appendSessionID(roomURL, bootstrap.Room.SessionID),
++			ExtraDID:          bootstrap.DID,
++			ExtraPID:          bootstrap.PID,
++		},
++	}, nil
++}
++
++func init() { //nolint:gochecknoinits // auth registration is the canonical Go pattern for plugins
++	auth.Register("mtslink", Provider{})
++}
+diff --git a/internal/auth/mtslink/mtslink_test.go b/internal/auth/mtslink/mtslink_test.go
+new file mode 100644
+index 0000000..0ab476b
+--- /dev/null
++++ b/internal/auth/mtslink/mtslink_test.go
+@@ -0,0 +1,26 @@
++package mtslink
++
++import "testing"
++
++func TestParseRoomFullStreamURL(t *testing.T) {
++	room, err := ParseRoom("https://my.mts-link.ru/j/167846474/19645959806/stream-new/18867526566")
++	if err != nil {
++		t.Fatal(err)
++	}
++	if room.UserID != "167846474" || room.EventID != "19645959806" || room.SessionID != "18867526566" {
++		t.Fatalf("room = %#v", room)
++	}
++}
++
++func TestParseRoomPermanentURLLeavesSessionForResolve(t *testing.T) {
++	room, err := ParseRoom("https://my.mts-link.ru/j/167846474/19645959806")
++	if err != nil {
++		t.Fatal(err)
++	}
++	if room.UserID != "167846474" || room.EventID != "19645959806" {
++		t.Fatalf("room = %#v", room)
++	}
++	if room.SessionID != "" {
++		t.Fatalf("short permanent URL must resolve session lazily, got %#v", room)
++	}
++}
+diff --git a/internal/auth/mtslink/room.go b/internal/auth/mtslink/room.go
+new file mode 100644
+index 0000000..77e8b6e
+--- /dev/null
++++ b/internal/auth/mtslink/room.go
+@@ -0,0 +1,74 @@
++package mtslink
++
++import (
++	"crypto/rand"
++	"encoding/hex"
++	"fmt"
++	"net/url"
++	"regexp"
++	"strings"
++)
++
++type RoomInfo struct {
++	RawURL    string
++	SessionID string
++	EventID   string
++	UserID    string
++}
++
++func ParseRoom(raw string) (RoomInfo, error) {
++	raw = strings.TrimSpace(raw)
++	if raw == "" {
++		return RoomInfo{}, authErrRoomRequired()
++	}
++	if !strings.Contains(raw, "://") {
++		raw = "https://" + strings.TrimPrefix(raw, "//")
++	}
++	u, err := url.Parse(raw)
++	if err != nil {
++		return RoomInfo{}, err
++	}
++	parts := strings.Split(strings.Trim(u.Path, "/"), "/")
++	info := RoomInfo{RawURL: raw}
++
++	for i := 0; i < len(parts); i++ {
++		if parts[i] == "j" && i+2 < len(parts) {
++			info.UserID = parts[i+1]
++			info.EventID = parts[i+2]
++		}
++		if (parts[i] == "stream-new" || parts[i] == "session") && i+1 < len(parts) {
++			info.SessionID = parts[i+1]
++		}
++	}
++
++	if info.SessionID == "" && info.EventID == "" {
++		re := regexp.MustCompile(`^[0-9]{6,}$`)
++		for i := len(parts) - 1; i >= 0; i-- {
++			if re.MatchString(parts[i]) {
++				info.SessionID = parts[i]
++				break
++			}
++		}
++	}
++	if info.SessionID == "" && info.EventID == "" {
++		return info, fmt.Errorf("mtslink: cannot detect event/session id from %q", raw)
++	}
++	return info, nil
++}
++
++func appendSessionID(roomURL, sessionID string) string {
++	if sessionID == "" || strings.Contains(roomURL, "/stream-new/") || strings.Contains(roomURL, "/session/") {
++		return roomURL
++	}
++	return strings.TrimRight(roomURL, "/") + "/stream-new/" + sessionID
++}
++
++func RandHex(n int) string {
++	b := make([]byte, n)
++	_, _ = rand.Read(b)
++	return hex.EncodeToString(b)
++}
++
++func authErrRoomRequired() error {
++	return fmt.Errorf("mtslink: room URL required")
++}
+diff --git a/internal/engine/builtin/builtin.go b/internal/engine/builtin/builtin.go
+index 29d3b15..6a61f22 100644
+--- a/internal/engine/builtin/builtin.go
++++ b/internal/engine/builtin/builtin.go
+@@ -13,6 +13,7 @@ import (
+ 
+ 	"github.com/openlibrecommunity/olcrtc/internal/auth"
+ 	authJitsi "github.com/openlibrecommunity/olcrtc/internal/auth/jitsi"
++	authMTSLink "github.com/openlibrecommunity/olcrtc/internal/auth/mtslink"
+ 	authSaluteJazz "github.com/openlibrecommunity/olcrtc/internal/auth/salutejazz"
+ 	authTelemost "github.com/openlibrecommunity/olcrtc/internal/auth/telemost"
+ 	authWBStream "github.com/openlibrecommunity/olcrtc/internal/auth/wbstream"
+@@ -20,6 +21,7 @@ import (
+ 	_ "github.com/openlibrecommunity/olcrtc/internal/engine/goolom"     // register goolom engine via init
+ 	_ "github.com/openlibrecommunity/olcrtc/internal/engine/jitsi"      // register jitsi engine via init
+ 	_ "github.com/openlibrecommunity/olcrtc/internal/engine/livekit"    // register livekit engine via init
++	_ "github.com/openlibrecommunity/olcrtc/internal/engine/mtslink"    // register mtslink engine via init
+ 	_ "github.com/openlibrecommunity/olcrtc/internal/engine/salutejazz" // register salutejazz engine via init
+ )
+ 
+@@ -82,6 +84,7 @@ func RegisterDefaults() {
+ 	registerEngineAuth("jazz", authSaluteJazz.Provider{})
+ 	registerEngineAuth("telemost", authTelemost.Provider{})
+ 	registerEngineAuth("jitsi", authJitsi.Provider{})
++	registerEngineAuth("mtslink", authMTSLink.Provider{})
+ 	registerDirect("none")
+ }
+ 
+diff --git a/internal/engine/mtslink/mtslink.go b/internal/engine/mtslink/mtslink.go
+new file mode 100644
+index 0000000..0f2d5d5
+--- /dev/null
++++ b/internal/engine/mtslink/mtslink.go
+@@ -0,0 +1,353 @@
++package mtslink
++
++import (
++	"context"
++	"errors"
++	"fmt"
++	"os"
++	"sync"
++	"sync/atomic"
++	"time"
++
++	authMTSLink "github.com/openlibrecommunity/olcrtc/internal/auth/mtslink"
++	"github.com/openlibrecommunity/olcrtc/internal/engine"
++	"github.com/openlibrecommunity/olcrtc/internal/logger"
++	"github.com/pion/interceptor"
++	"github.com/pion/interceptor/pkg/intervalpli"
++	"github.com/pion/webrtc/v4"
++)
++
++const (
++	defaultSendQueueSize = 16
++	defaultGuestName     = "olcrtc-mtslink"
++)
++
++var (
++	ErrSessionClosed       = errors.New("mtslink session closed")
++	ErrByteStreamDisabled  = errors.New("mtslink byte stream unsupported; use videochannel")
++	ErrSessionIDRequired   = errors.New("mtslink session id required")
++	ErrUserIDRequired      = errors.New("mtslink user id required")
++	ErrJoinTokenRequired   = errors.New("mtslink join token required")
++	ErrPublishTokenMissing = errors.New("mtslink publish token required")
++)
++
++type Session struct {
++	name         string
++	roomURL      string
++	sessionID    string
++	userID       string
++	joinToken    string
++	publishToken string
++	conferenceID string
++	did          string
++	pid          string
++
++	client *authMTSLink.Client
++
++	pcMu sync.Mutex
++	pc   *webrtc.PeerConnection
++
++	videoTrackMu sync.RWMutex
++	videoTracks  []webrtc.TrackLocal
++	onVideoTrack func(*webrtc.TrackRemote, *webrtc.RTPReceiver)
++
++	onReconnect     func(*webrtc.DataChannel)
++	shouldReconnect func() bool
++	onEnded         func(string)
++
++	sendQueue chan []byte
++	done      chan struct{}
++	cancel    context.CancelFunc
++
++	connected atomic.Bool
++	closed    atomic.Bool
++	closeOnce sync.Once
++	wg        sync.WaitGroup
++}
++
++func New(_ context.Context, cfg engine.Config) (engine.Session, error) {
++	extra := cfg.Extra
++	if extra == nil {
++		extra = map[string]string{}
++	}
++	sessionID := extra[authMTSLink.ExtraSessionID]
++	if sessionID == "" {
++		return nil, ErrSessionIDRequired
++	}
++	userID := extra[authMTSLink.ExtraUserID]
++	if userID == "" {
++		return nil, ErrUserIDRequired
++	}
++	joinToken := extra[authMTSLink.ExtraJoinToken]
++	if joinToken == "" {
++		joinToken = cfg.Token
++	}
++	if joinToken == "" {
++		return nil, ErrJoinTokenRequired
++	}
++	publishToken := extra[authMTSLink.ExtraPublishToken]
++	if publishToken == "" {
++		return nil, ErrPublishTokenMissing
++	}
++	name := cfg.Name
++	if name == "" {
++		name = defaultGuestName
++	}
++	_, cancel := context.WithCancel(context.Background())
++	client := authMTSLink.NewClient(os.Getenv("MTS_COOKIE"))
++	client.GuestName = name
++	return &Session{
++		name:         name,
++		roomURL:      extra[authMTSLink.ExtraRoomURL],
++		sessionID:    sessionID,
++		userID:       userID,
++		joinToken:    joinToken,
++		publishToken: publishToken,
++		conferenceID: extra[authMTSLink.ExtraConferenceID],
++		did:          extra[authMTSLink.ExtraDID],
++		pid:          extra[authMTSLink.ExtraPID],
++		client:       client,
++		sendQueue:    make(chan []byte, defaultSendQueueSize),
++		done:         make(chan struct{}),
++		cancel:       cancel,
++	}, nil
++}
++
++func (s *Session) Capabilities() engine.Capabilities {
++	return engine.Capabilities{VideoTrack: true}
++}
++
++func (s *Session) Connect(ctx context.Context) error {
++	if s.closed.Load() {
++		return ErrSessionClosed
++	}
++
++	pc, err := s.newPeerConnection()
++	if err != nil {
++		return err
++	}
++
++	s.videoTrackMu.RLock()
++	for _, track := range s.videoTracks {
++		if _, err := pc.AddTrack(track); err != nil {
++			s.videoTrackMu.RUnlock()
++			_ = pc.Close()
++			return fmt.Errorf("mtslink add local video track: %w", err)
++		}
++	}
++	s.videoTrackMu.RUnlock()
++
++	if _, err := pc.AddTransceiverFromKind(
++		webrtc.RTPCodecTypeVideo,
++		webrtc.RTPTransceiverInit{Direction: webrtc.RTPTransceiverDirectionSendrecv},
++	); err != nil {
++		_ = pc.Close()
++		return fmt.Errorf("mtslink add video transceiver: %w", err)
++	}
++
++	pc.OnTrack(func(track *webrtc.TrackRemote, recv *webrtc.RTPReceiver) {
++		if track.Kind() != webrtc.RTPCodecTypeVideo {
++			return
++		}
++		if cb := s.videoTrackHandler(); cb != nil {
++			cb(track, recv)
++		}
++	})
++	pc.OnConnectionStateChange(func(state webrtc.PeerConnectionState) {
++		logger.Debugf("mtslink pc state: %s", state.String())
++		switch state {
++		case webrtc.PeerConnectionStateConnected:
++			s.connected.Store(true)
++		case webrtc.PeerConnectionStateFailed, webrtc.PeerConnectionStateClosed, webrtc.PeerConnectionStateDisconnected:
++			s.connected.Store(false)
++			if !s.closed.Load() && s.onEnded != nil {
++				s.onEnded("mtslink peer connection " + state.String())
++			}
++		}
++	})
++
++	offer, err := s.localOffer(ctx, pc)
++	if err != nil {
++		_ = pc.Close()
++		return err
++	}
++
++	bootstrap := authMTSLink.Bootstrap{
++		Room:         authMTSLink.RoomInfo{RawURL: s.roomURL, SessionID: s.sessionID},
++		UserID:       s.userID,
++		JoinToken:    s.joinToken,
++		PublishToken: s.publishToken,
++		ConferenceID: s.conferenceID,
++		DID:          s.did,
++		PID:          s.pid,
++	}
++	answer, peerID, err := s.client.JoinSFU(ctx, bootstrap, offer, s.name)
++	if err != nil {
++		_ = pc.Close()
++		return fmt.Errorf("mtslink sfu join: %w", err)
++	}
++	if err := pc.SetRemoteDescription(webrtc.SessionDescription{Type: webrtc.SDPTypeAnswer, SDP: answer}); err != nil {
++		_ = pc.Close()
++		return fmt.Errorf("mtslink set answer: %w", err)
++	}
++
++	s.pcMu.Lock()
++	old := s.pc
++	s.pc = pc
++	s.pcMu.Unlock()
++	if old != nil {
++		_ = old.Close()
++	}
++
++	_ = s.client.AudioVideoControl(ctx, s.conferenceID, true)
++	s.wg.Add(1)
++	go s.pinLoop(peerID)
++	logger.Infof("mtslink: joined session=%s peer=%s", s.sessionID, peerID)
++	return nil
++}
++
++func (s *Session) newPeerConnection() (*webrtc.PeerConnection, error) {
++	mediaEngine := &webrtc.MediaEngine{}
++	if err := mediaEngine.RegisterDefaultCodecs(); err != nil {
++		return nil, err
++	}
++	registry := &interceptor.Registry{}
++	intervalPliFactory, err := intervalpli.NewReceiverInterceptor()
++	if err != nil {
++		return nil, err
++	}
++	registry.Add(intervalPliFactory)
++	if err := webrtc.RegisterDefaultInterceptors(mediaEngine, registry); err != nil {
++		return nil, err
++	}
++	api := webrtc.NewAPI(webrtc.WithMediaEngine(mediaEngine), webrtc.WithInterceptorRegistry(registry))
++	pc, err := api.NewPeerConnection(webrtc.Configuration{})
++	if err != nil {
++		return nil, fmt.Errorf("mtslink new peer connection: %w", err)
++	}
++	return pc, nil
++}
++
++func (s *Session) localOffer(ctx context.Context, pc *webrtc.PeerConnection) (string, error) {
++	offer, err := pc.CreateOffer(nil)
++	if err != nil {
++		return "", fmt.Errorf("mtslink create offer: %w", err)
++	}
++	gatherComplete := webrtc.GatheringCompletePromise(pc)
++	if err := pc.SetLocalDescription(offer); err != nil {
++		return "", fmt.Errorf("mtslink set local offer: %w", err)
++	}
++	select {
++	case <-gatherComplete:
++	case <-ctx.Done():
++		return "", ctx.Err()
++	case <-time.After(8 * time.Second):
++		logger.Debugf("mtslink ICE gather timeout; continuing with partial offer")
++	}
++	ld := pc.LocalDescription()
++	if ld == nil {
++		return "", errors.New("mtslink missing local description")
++	}
++	return ld.SDP, nil
++}
++
++func (s *Session) pinLoop(peerID string) {
++	defer s.wg.Done()
++	if peerID == "" {
++		return
++	}
++	ticker := time.NewTicker(3 * time.Second)
++	defer ticker.Stop()
++	for {
++		select {
++		case <-s.done:
++			return
++		case <-ticker.C:
++			if err := s.client.Pin(context.Background(), peerID); err != nil {
++				logger.Debugf("mtslink pin: %v", err)
++			}
++		}
++	}
++}
++
++func (s *Session) Send([]byte) error { return ErrByteStreamDisabled }
++
++func (s *Session) Close() error {
++	s.closeOnce.Do(func() {
++		s.closed.Store(true)
++		s.connected.Store(false)
++		if s.cancel != nil {
++			s.cancel()
++		}
++		close(s.done)
++		s.pcMu.Lock()
++		pc := s.pc
++		s.pc = nil
++		s.pcMu.Unlock()
++		if pc != nil {
++			_ = pc.Close()
++		}
++		_ = s.client.AudioVideoControl(context.Background(), s.conferenceID, false)
++		stopped := make(chan struct{})
++		go func() {
++			s.wg.Wait()
++			close(stopped)
++		}()
++		select {
++		case <-stopped:
++		case <-time.After(2 * time.Second):
++		}
++	})
++	return nil
++}
++
++func (s *Session) SetReconnectCallback(cb func(*webrtc.DataChannel)) { s.onReconnect = cb }
++func (s *Session) SetShouldReconnect(fn func() bool)                 { s.shouldReconnect = fn }
++func (s *Session) SetEndedCallback(cb func(string))                  { s.onEnded = cb }
++
++func (s *Session) WatchConnection(ctx context.Context) {
++	select {
++	case <-ctx.Done():
++	case <-s.done:
++	}
++}
++
++func (s *Session) CanSend() bool {
++	return !s.closed.Load() && s.connected.Load()
++}
++
++func (s *Session) GetSendQueue() chan []byte { return s.sendQueue }
++func (s *Session) GetBufferedAmount() uint64 { return 0 }
++
++func (s *Session) AddVideoTrack(track webrtc.TrackLocal) error {
++	s.videoTrackMu.Lock()
++	s.videoTracks = append(s.videoTracks, track)
++	s.videoTrackMu.Unlock()
++
++	s.pcMu.Lock()
++	pc := s.pc
++	s.pcMu.Unlock()
++	if pc == nil {
++		return nil
++	}
++	if _, err := pc.AddTrack(track); err != nil {
++		return fmt.Errorf("mtslink add video track: %w", err)
++	}
++	return nil
++}
++
++func (s *Session) SetVideoTrackHandler(cb func(*webrtc.TrackRemote, *webrtc.RTPReceiver)) {
++	s.videoTrackMu.Lock()
++	defer s.videoTrackMu.Unlock()
++	s.onVideoTrack = cb
++}
++
++func (s *Session) videoTrackHandler() func(*webrtc.TrackRemote, *webrtc.RTPReceiver) {
++	s.videoTrackMu.RLock()
++	defer s.videoTrackMu.RUnlock()
++	return s.onVideoTrack
++}
++
++func init() { //nolint:gochecknoinits // engine registration is the canonical Go pattern for plugins
++	engine.Register("mtslink", New)
++}
+diff --git a/internal/transport/videochannel/ffmpeg.go b/internal/transport/videochannel/ffmpeg.go
+index e2b6512..702d89d 100644
+--- a/internal/transport/videochannel/ffmpeg.go
++++ b/internal/transport/videochannel/ffmpeg.go
+@@ -57,7 +57,10 @@ type codecSpec struct {
+ 	encodeArgs   []string
+ }
+ 
+-func codecSpecForCarrier(_ string) codecSpec {
++func codecSpecForCarrier(carrier string) codecSpec {
++	if strings.EqualFold(carrier, "mtslink") {
++		return h264CodecSpec()
++	}
+ 	return vp8CodecSpec()
+ }
+ 
+@@ -569,8 +572,8 @@ func writeIVFHeader(w io.Writer, fourCC string, width, height, frameRate int) er
+ 	binary.LittleEndian.PutUint16(header[4:6], 0)
+ 	binary.LittleEndian.PutUint16(header[6:8], 32)
+ 	copy(header[8:12], []byte(fourCC))
+-	binary.LittleEndian.PutUint16(header[12:14], uint16(width)) //nolint:gosec,lll // G115: bounded conversion verified by surrounding logic
+-	binary.LittleEndian.PutUint16(header[14:16], uint16(height)) //nolint:gosec,lll // G115: bounded conversion verified by surrounding logic
++	binary.LittleEndian.PutUint16(header[12:14], uint16(width))     //nolint:gosec,lll // G115: bounded conversion verified by surrounding logic
++	binary.LittleEndian.PutUint16(header[14:16], uint16(height))    //nolint:gosec,lll // G115: bounded conversion verified by surrounding logic
+ 	binary.LittleEndian.PutUint32(header[16:20], uint32(frameRate)) //nolint:gosec,lll // G115: bounded conversion verified by surrounding logic
+ 	binary.LittleEndian.PutUint32(header[20:24], 1)
+ 	binary.LittleEndian.PutUint32(header[24:28], 0)

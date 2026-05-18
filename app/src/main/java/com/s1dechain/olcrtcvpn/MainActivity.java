@@ -274,7 +274,7 @@ public final class MainActivity extends Activity {
         linkInput.setMinLines(5);
         linkInput.setGravity(Gravity.TOP | Gravity.START);
         linkInput.setInputType(InputType.TYPE_CLASS_TEXT | InputType.TYPE_TEXT_FLAG_MULTI_LINE | InputType.TYPE_TEXT_FLAG_NO_SUGGESTIONS);
-        linkInput.setHint("olcrtc://wbstream?datachannel@room#64hex...%default$direct\nили vp8: olcrtc://telemost?vp8channel<vp8-fps=25&vp8-batch=1>@room#key%default$direct");
+        linkInput.setHint("olcrtc://wbstream?datachannel@room#64hex...%default$direct\nили MTS Link: olcrtc://mtslink?videochannel<video-w=640&video-h=360&video-fps=15>@https%3A%2F%2Fmy.mts-link.ru%2Fj%2F...#key$profile");
         linkInput.setTextColor(Color.parseColor("#111111"));
         linkInput.setHintTextColor(Color.parseColor("#A0A5AE"));
         linkInput.setTextSize(TypedValue.COMPLEX_UNIT_SP, 14);
@@ -758,7 +758,7 @@ public final class MainActivity extends Activity {
     private String humanError(String raw) {
         String s = raw == null ? "" : raw.toLowerCase();
 
-        if (s.contains("videochannel") && s.contains("ffmpeg")) return "videochannel требует нативный core с ffmpeg. В этой Android-сборке используй vp8channel или seichannel.";
+        if (s.contains("videochannel") && s.contains("ffmpeg")) return "videochannel требует нативный core с ffmpeg. MTS Link videochannel сейчас запускай в Windows-сборке.";
         if ((s.contains("seichannel") || s.contains("videochannel")) && (s.contains("setseioptions") || s.contains("setvideooptions") || s.contains("startwithtransport") || s.contains("combo aar"))) return "Нужен свежий combo AAR с поддержкой universal-carrier. Собери scripts/build_combo_aar.sh и пересобери APK.";
         if (s.contains("only datachannel") || s.contains("use datachannel")) return "Эта ссылка не поддерживается этой сборкой. Используй datachannel или vp8channel.";
         if (s.contains("vp8channel") && (s.contains("no startwithtransport") || s.contains("settransport") || s.contains("rebuild app/libs/olcrtccombo.aar"))) return "Нужен свежий combo AAR с поддержкой vp8channel. Собери scripts/build_combo_aar.sh и пересобери APK.";

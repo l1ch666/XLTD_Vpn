@@ -45,19 +45,23 @@ clone_olcrtc
 clone_if_missing "https://github.com/xjasonlyu/tun2socks" "${TUN_DIR}"
 
 apply_olcrtc_patch() {
-  local patch="${PROJECT_ROOT}/patches/olcrtc-vp8-legacy-binding.patch"
-  if [ ! -f "${patch}" ]; then
-    return
-  fi
-  if git -C "${OLC_DIR}" apply --check "${patch}" >/dev/null 2>&1; then
-    echo "Applying local olcRTC compatibility patch: ${patch}"
-    git -C "${OLC_DIR}" apply "${patch}"
-  elif git -C "${OLC_DIR}" apply --reverse --check --ignore-space-change --ignore-whitespace "${patch}" >/dev/null 2>&1; then
-    echo "Local olcRTC compatibility patch already applied."
-  else
-    echo "ERROR: local olcRTC compatibility patch does not apply cleanly: ${patch}" >&2
-    exit 1
-  fi
+  local patch
+  for patch in \
+    "${PROJECT_ROOT}/patches/olcrtc-vp8-legacy-binding.patch" \
+    "${PROJECT_ROOT}/patches/olcrtc-mtslink-carrier.patch"; do
+    if [ ! -f "${patch}" ]; then
+      continue
+    fi
+    if git -C "${OLC_DIR}" apply --check "${patch}" >/dev/null 2>&1; then
+      echo "Applying local olcRTC patch: ${patch}"
+      git -C "${OLC_DIR}" apply "${patch}"
+    elif git -C "${OLC_DIR}" apply --reverse --check --ignore-space-change --ignore-whitespace "${patch}" >/dev/null 2>&1; then
+      echo "Local olcRTC patch already applied: ${patch}"
+    else
+      echo "ERROR: local olcRTC patch does not apply cleanly: ${patch}" >&2
+      exit 1
+    fi
+  done
 }
 
 apply_olcrtc_patch

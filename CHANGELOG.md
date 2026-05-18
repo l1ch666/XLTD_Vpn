@@ -1,5 +1,19 @@
 # Changelog
 
+## 1.8.0-universal-carrier
+
+- Added a local olcRTC fork patch for experimental `mtslink` carrier support.
+- Added MTS Link guest bootstrap, `/stream-new/{sessionId}` room handling, and an H.264 WebRTC engine for `videochannel`.
+- Added lazy session discovery for permanent MTS Link `/j/{userId}/{eventId}` room links.
+- Added MTS Link URI/parser coverage and a `MTSLINK.md` noobs server/client setup guide.
+- Android can parse and store MTS Link profiles, but runtime `videochannel` still requires an ffmpeg-backed Android core.
+
+## Windows 0.4.0-beta
+
+- Rebuilt Windows with the local MTS Link olcRTC fork patch.
+- Added Windows defaults for `mtslink` `videochannel`: 640x360, 15 FPS, 1200k bitrate.
+- Windows remains the runnable client target for MTS Link because the package already bundles `ffmpeg.exe`.
+
 ## 1.7.0-universal-carrier
 
 - Fixed `vp8channel` startup when one side hashes a bare Telemost room id and the other side hashes the canonical `https://telemost.yandex.ru/j/...` URL.

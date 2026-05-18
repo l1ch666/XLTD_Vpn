@@ -182,12 +182,13 @@ internal sealed class CoreProcessManager : IDisposable
 
         if (config.Transport == OlcUriParser.TransportVideo)
         {
+            var isMtsLink = string.Equals(config.Carrier, "mtslink", StringComparison.OrdinalIgnoreCase);
             sb.AppendLine("video:");
             sb.AppendLine($"  codec: {Yaml(config.Param("video-codec", "qrcode"))}");
-            sb.AppendLine($"  width: {config.IntParam("video-w", config.IntParam("video-width", 1080))}");
-            sb.AppendLine($"  height: {config.IntParam("video-h", config.IntParam("video-height", 1080))}");
-            sb.AppendLine($"  fps: {config.IntParam("video-fps", 60)}");
-            sb.AppendLine($"  bitrate: {Yaml(config.Param("video-bitrate", "5000k"))}");
+            sb.AppendLine($"  width: {config.IntParam("video-w", config.IntParam("video-width", isMtsLink ? 640 : 1080))}");
+            sb.AppendLine($"  height: {config.IntParam("video-h", config.IntParam("video-height", isMtsLink ? 360 : 1080))}");
+            sb.AppendLine($"  fps: {config.IntParam("video-fps", isMtsLink ? 15 : 60)}");
+            sb.AppendLine($"  bitrate: {Yaml(config.Param("video-bitrate", isMtsLink ? "1200k" : "5000k"))}");
             sb.AppendLine($"  hw: {Yaml(config.Param("video-hw", "none"))}");
             sb.AppendLine($"  qr_size: {config.IntParam("video-qr-size", 0)}");
             sb.AppendLine($"  qr_recovery: {Yaml(config.Param("video-qr-recovery", "low"))}");

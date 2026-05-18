@@ -8,7 +8,7 @@ $env:DOTNET_CLI_TELEMETRY_OPTOUT = "1"
 $env:DOTNET_NOLOGO = "1"
 
 $projectRoot = Split-Path -Parent $PSScriptRoot
-$version = "0.3.0-beta"
+$version = "0.4.0-beta"
 $project = Join-Path $projectRoot "windows\XLTD.Vpn.Windows\XLTD.Vpn.Windows.csproj"
 $projectDir = Split-Path -Parent $project
 $toolsDir = Join-Path $projectDir "tools"
@@ -18,7 +18,10 @@ $ffmpegCacheDir = Join-Path $projectRoot ".external\ffmpeg"
 $ffmpegZip = Join-Path $ffmpegCacheDir "ffmpeg-release-essentials.zip"
 $ffmpegExtractDir = Join-Path $ffmpegCacheDir "extract"
 $ffmpegUrl = "https://www.gyan.dev/ffmpeg/builds/ffmpeg-release-essentials.zip"
-$olcrtcPatch = Join-Path $projectRoot "patches\olcrtc-vp8-legacy-binding.patch"
+$olcrtcPatches = @(
+    (Join-Path $projectRoot "patches\olcrtc-vp8-legacy-binding.patch"),
+    (Join-Path $projectRoot "patches\olcrtc-mtslink-carrier.patch")
+)
 $distRoot = Join-Path $projectRoot "dist\windows"
 $publishDir = Join-Path $distRoot "XLTD_Vpn_Windows-$version-$Runtime"
 $zipPath = Join-Path $distRoot "XLTD_Vpn-Windows-$version-$Runtime.zip"
@@ -124,7 +127,9 @@ if (-not (Test-Path $tun2socksSource)) {
     throw "Missing local tun2socks source at $tun2socksSource. Rebuild/fetch .external first."
 }
 
-Apply-GitPatchIfNeeded $olcrtcSource $olcrtcPatch
+foreach ($patch in $olcrtcPatches) {
+    Apply-GitPatchIfNeeded $olcrtcSource $patch
+}
 
 $ffmpegSource = Resolve-Ffmpeg
 

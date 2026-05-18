@@ -7,6 +7,7 @@ public final class OlcUriParserContractTest {
         parsesUniversalCarrierUriWithoutClientId();
         parsesLegacyClientIdTail();
         parsesUriLineFromServerOutput();
+        parsesMtsLinkVideoChannelUri();
         usesClientIdTransportParam();
         acceptsAliasesAndJazzEmptyRoom();
         rejectsBadKey();
@@ -70,6 +71,21 @@ public final class OlcUriParserContractTest {
         assertEquals("transport", OlcUriParser.TRANSPORT_SEI, config.transport);
         assertEquals("clientId", "phone", config.clientId);
         assertEquals("ack-ms", 2000, config.intParam("ack-ms", 0));
+    }
+
+    private static void parsesMtsLinkVideoChannelUri() {
+        OlcConfig config = OlcUriParser.parse(
+                "olcrtc://mtslink?videochannel<video-w=640&video-h=360&video-fps=15&video-bitrate=1200k>@"
+                        + "https%3A%2F%2Fmy.mts-link.ru%2Fj%2F167846474%2F19645959806%2Fstream-new%2F18867526566#"
+                        + KEY
+                        + "$mtslink"
+        );
+
+        assertEquals("carrier", "mtslink", config.carrier);
+        assertEquals("transport", OlcUriParser.TRANSPORT_VIDEO, config.transport);
+        assertEquals("roomId", "https://my.mts-link.ru/j/167846474/19645959806/stream-new/18867526566", config.roomId);
+        assertEquals("video-w", 640, config.intParam("video-w", 0));
+        assertEquals("video-fps", 15, config.intParam("video-fps", 0));
     }
 
     private static void acceptsAliasesAndJazzEmptyRoom() {
