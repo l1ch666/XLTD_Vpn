@@ -61,9 +61,14 @@ The matching client profile URI is:
 olcrtc://mtslink?videochannel<video-w=640&video-h=360&video-fps=15&video-bitrate=1200k&mts-peer-update=1&mts-silent-audio=1&mts-force-video=1>@https%3A%2F%2Fmy.mts-link.ru%2Fj%2F167846474%2F19645959806#64_hex_key_here$MTS%20Link
 ```
 
-Windows `0.5.0-beta` bundles `ffmpeg.exe` and can run this profile. Android
+Windows `0.5.1-beta` bundles `ffmpeg.exe` and can run this profile. Android
 parses and stores the profile, but runtime `videochannel` still needs an
 ffmpeg-backed Android core.
+
+`0.5.1-beta` keeps the incoming MTS video receiver separate from the outgoing
+H.264 QR stream and fixes ffmpeg H.264 frame boundaries. This targets the case
+where MTS joined successfully but olcRTC failed with `open control stream:
+timeout` before SOCKS became ready.
 
 ## MTS Link diagnostics
 

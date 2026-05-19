@@ -1,5 +1,16 @@
 # Changelog
 
+## 1.9.1-universal-carrier
+
+- Fixed MTS Link videochannel negotiation so the incoming video receiver stays separate from the outgoing H.264 QR track.
+- Fixed H.264 encoder framing: ffmpeg output is now split into complete Annex-B access units before `WriteSample`, instead of arbitrary pipe chunks.
+- Forced low-latency baseline H.264 encoder settings with repeated headers for MTS Link compatibility.
+
+## Windows 0.5.1-beta
+
+- Rebuilt Windows with the MTS Link video transceiver and H.264 frame-boundary fixes.
+- This specifically targets the `open control stream: timeout/read-write on closed pipe` failure after a successful MTS SFU join.
+
 ## 1.9.0-universal-carrier
 
 - Replaced the first experimental MTS Link patch with the reviewed fork implementation from `olcrtc-mtslink-universal-carrier-visible-h264-compilefix-fork.zip`.

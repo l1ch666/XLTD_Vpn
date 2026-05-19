@@ -1,4 +1,4 @@
-# olcRTC Android client - 1.9.0 universal-carrier
+# olcRTC Android client - 1.9.1 universal-carrier
 
 This build updates the Android client for the `openlibrecommunity/olcrtc` `refactor/universal-carrier` branch.
 
@@ -12,7 +12,7 @@ The repository now also contains a separate Windows beta client:
 windows/XLTD.Vpn.Windows
 ```
 
-Windows uses its own version line. Current Windows beta: `0.5.0-beta`. Build it with:
+Windows uses its own version line. Current Windows beta: `0.5.1-beta`. Build it with:
 
 ```powershell
 powershell -ExecutionPolicy Bypass -File scripts/build_windows.ps1
@@ -34,7 +34,7 @@ Reality check for Android VPN mode:
 - `datachannel` is still the fastest when the carrier supports it.
 - `vp8channel` is the main stable media transport for `telemost` / `wbstream`.
 - `seichannel` is accepted and passed into the new Android core, but it is still more experimental under full-TUN traffic bursts.
-- `videochannel` links parse correctly on Android, but this APK does not bundle an ffmpeg-backed Android video core yet. Windows 0.5.0-beta bundles `ffmpeg.exe` for `videochannel`.
+- `videochannel` links parse correctly on Android, but this APK does not bundle an ffmpeg-backed Android video core yet. Windows 0.5.1-beta bundles `ffmpeg.exe` for `videochannel`.
 - `mtslink` is a local olcRTC fork carrier that uses `videochannel` over H.264. See `MTSLINK.md`.
 
 ## URI support
@@ -124,6 +124,12 @@ Example:
 ```text
 olcrtc://wbstream?vp8channel<vp8-fps=60&vp8-batch=64&tcp-limit=2&mtu=1040&client-id=default>@019e1742-db64-733a-a991-a570984bdb59#bbb9a2e3613bd4dc93fc88f858e0a4a882b30b55976cb6f408e1f421a9cda9c4$wb-vp8
 ```
+
+## What changed in 1.9.1
+
+- Fixed the MTS Link H.264 path used by `videochannel`: outgoing QR video now uses a separate sendonly m-line and keeps an incoming video receiver for the peer tunnel.
+- Fixed raw H.264 frame boundaries from ffmpeg so WebRTC receives complete Annex-B access units, not arbitrary pipe chunks.
+- Windows `0.5.1-beta` targets the post-join `open control stream` timeout seen after MTS SFU connected successfully.
 
 ## What changed in 1.9.0
 
