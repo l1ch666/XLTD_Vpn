@@ -1,5 +1,18 @@
 # Changelog
 
+## 1.9.0-universal-carrier
+
+- Replaced the first experimental MTS Link patch with the reviewed fork implementation from `olcrtc-mtslink-universal-carrier-visible-h264-compilefix-fork.zip`.
+- Hardened MTS Link guest bot bootstrap: prejoin page cookies, guestlogin, cached session probes, connection/conference creation, join-token extraction, and publish-token fallback.
+- Added MTS Link peer update flow, visible H.264 diagnostic frames, explicit H.264 codec profile, repeated pinning, and silent Opus RTP to make the bot look closer to a browser participant.
+- Kept Android parser/profile support and MTS Link video defaults while Android runtime `videochannel` remains blocked until an ffmpeg-backed Android core is packaged.
+
+## Windows 0.5.0-beta
+
+- Rebuilt Windows with the reviewed MTS Link fork core.
+- Added MTS runtime environment wiring for `MTS_FORCE_VIDEO`, `MTS_PEER_UPDATE`, `MTS_SILENT_AUDIO`, optional `MTS_VIDEO_TEST`, and optional `MTS_VIDEO_CODEC`.
+- Kept Windows as the runnable MTS Link target with bundled `ffmpeg.exe`, `olcrtc.exe`, and `tun2socks.exe`.
+
 ## 1.8.0-universal-carrier
 
 - Added a local olcRTC fork patch for experimental `mtslink` carrier support.

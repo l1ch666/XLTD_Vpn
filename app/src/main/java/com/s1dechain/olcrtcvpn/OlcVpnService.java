@@ -573,11 +573,12 @@ public final class OlcVpnService extends VpnService {
             return config.transport + " <fps=" + seiFps(config) + ", batch=" + seiBatch(config) + ", frag=" + seiFrag(config) + ", ack-ms=" + seiAckMs(config) + ">";
         }
         if (isVideo(config)) {
+            boolean isMtsLink = "mtslink".equalsIgnoreCase(config.carrier);
             String codec = config.param("video-codec", "qrcode");
-            int w = config.intParam("video-w", config.intParam("video-width", 1080));
-            int h = config.intParam("video-h", config.intParam("video-height", 1080));
-            int fps = config.intParam("video-fps", 60);
-            String bitrate = config.param("video-bitrate", "5000k");
+            int w = config.intParam("video-w", config.intParam("video-width", isMtsLink ? 640 : 1080));
+            int h = config.intParam("video-h", config.intParam("video-height", isMtsLink ? 360 : 1080));
+            int fps = config.intParam("video-fps", isMtsLink ? 15 : 60);
+            String bitrate = config.param("video-bitrate", isMtsLink ? "1200k" : "5000k");
             return config.transport + " <codec=" + codec + ", " + w + "x" + h + ", fps=" + fps + ", bitrate=" + bitrate + ">";
         }
         return config.transport;

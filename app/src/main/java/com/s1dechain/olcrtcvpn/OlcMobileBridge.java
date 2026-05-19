@@ -193,11 +193,12 @@ public final class OlcMobileBridge {
             return;
         }
         if (OlcUriParser.TRANSPORT_VIDEO.equals(transport)) {
+            boolean isMtsLink = "mtslink".equalsIgnoreCase(config.carrier);
             String codec = config.param("video-codec", "qrcode");
-            int width = config.intParam("video-w", config.intParam("video-width", 1080));
-            int height = config.intParam("video-h", config.intParam("video-height", 1080));
-            int fps = config.intParam("video-fps", 60);
-            String bitrate = config.param("video-bitrate", "5000k");
+            int width = config.intParam("video-w", config.intParam("video-width", isMtsLink ? 640 : 1080));
+            int height = config.intParam("video-h", config.intParam("video-height", isMtsLink ? 360 : 1080));
+            int fps = config.intParam("video-fps", isMtsLink ? 15 : 60);
+            String bitrate = config.param("video-bitrate", isMtsLink ? "1200k" : "5000k");
             String hw = config.param("video-hw", "none");
             String qrRecovery = config.param("video-qr-recovery", "low");
             int qrSize = config.intParam("video-qr-size", 0);

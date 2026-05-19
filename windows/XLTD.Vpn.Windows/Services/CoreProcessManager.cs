@@ -32,6 +32,10 @@ internal sealed class CoreProcessManager : IDisposable
             WorkingDirectory = Path.GetDirectoryName(exe) ?? AppContext.BaseDirectory
         };
         startInfo.Environment["PION_LOG_DISABLE"] = "all";
+        if (IsMtsLink(config))
+        {
+            ApplyMtsLinkEnvironment(startInfo, config);
+        }
 
         process = new Process { StartInfo = startInfo, EnableRaisingEvents = true };
         process.OutputDataReceived += (_, args) => Publish(args.Data);
@@ -158,6 +162,28 @@ internal sealed class CoreProcessManager : IDisposable
         sb.AppendLine($"data: {Yaml(dataDir)}");
         sb.AppendLine("debug: false");
         return sb.ToString();
+    }
+
+    private static bool IsMtsLink(OlcConfig config)
+    {
+        return string.Equals(config.Carrier, "mtslink", StringComparison.OrdinalIgnoreCase);
+    }
+
+    private static void ApplyMtsLinkEnvironment(ProcessStartInfo startInfo, OlcConfig config)
+    {
+        SetEnvIfNotEmpty(startInfo, "MTS_FORCE_VIDEO", config.Param("mts-force-video", "1"));
+        SetEnvIfNotEmpty(startInfo, "MTS_PEER_UPDATE", config.Param("mts-peer-update", "1"));
+        SetEnvIfNotEmpty(startInfo, "MTS_SILENT_AUDIO", config.Param("mts-silent-audio", "1"));
+        SetEnvIfNotEmpty(startInfo, "MTS_VIDEO_TEST", config.Param("mts-video-test", ""));
+        SetEnvIfNotEmpty(startInfo, "MTS_VIDEO_CODEC", config.Param("mts-video-codec", ""));
+    }
+
+    private static void SetEnvIfNotEmpty(ProcessStartInfo startInfo, string name, string value)
+    {
+        if (!string.IsNullOrWhiteSpace(value))
+        {
+            startInfo.Environment[name] = value.Trim();
+        }
     }
 
     private static void AppendTransportOptions(StringBuilder sb, OlcConfig config)
