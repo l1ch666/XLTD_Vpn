@@ -1,24 +1,48 @@
-# olcRTC Android client - 1.9.4 universal-carrier
+# XLTD VPN alpha / olcRTC Android client
+
+This branch is the isolated `0.0.1-alpha` line for a large Xray backend update.
+Stable olcRTC/MTS Link behavior is kept on the main line; the alpha branch adds
+Xray as a parallel backend for Android and Windows.
 
 This build uses the `l1ch666/mtsRTC` `mtslink-universal-carrier` fork for the bundled olcRTC core.
 
 Main point: the old app was mostly `datachannel/vp8channel`-only and expected the older URI layout with `%clientId`. The universal-carrier branch changes carrier/transport compatibility and the client URI docs no longer require `%clientId`, so the Android parser and combo AAR builder were updated.
 
-## Windows beta
+## Windows alpha
 
-The repository now also contains a separate Windows beta client:
+The repository also contains a separate Windows client:
 
 ```text
 windows/XLTD.Vpn.Windows
 ```
 
-Windows uses its own version line. Current Windows beta: `0.5.4-beta`. Build it with:
+Windows uses its own version line. Current Windows alpha on this branch: `0.0.1-alpha`. Build it with:
 
 ```powershell
 powershell -ExecutionPolicy Bypass -File scripts/build_windows.ps1
 ```
 
-See `WINDOWS.md` for the Windows beta scope and release policy.
+See `WINDOWS.md` for the Windows alpha scope and release policy.
+
+## Xray alpha
+
+The alpha clients also accept Xray profiles:
+
+```text
+vless://...
+vmess://...
+trojan://...
+ss://...
+socks://...
+http-proxy://...
+xray://<base64url-or-url-encoded-json>
+{ raw Xray JSON config }
+```
+
+The Android and Windows clients generate a local SOCKS inbound on
+`127.0.0.1:10808`, then reuse the existing VPN/proxy plumbing. Xray-core is
+pinned to `v26.5.9` in the build scripts. See `XRAY_ALPHA.md` for the exact
+build commands, supported stream settings, and alpha limitations.
 
 ## Accepted transports
 

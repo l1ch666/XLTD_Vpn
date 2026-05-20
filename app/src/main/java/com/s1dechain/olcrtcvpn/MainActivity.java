@@ -192,7 +192,7 @@ public final class MainActivity extends Activity {
         heroTextLp.setMargins(dp(14), 0, 0, 0);
 
         TextView title = new TextView(this);
-        title.setText("olcRTC VPN");
+        title.setText("XLTD VPN Alpha");
         title.setTextColor(Color.parseColor("#111111"));
         title.setTextSize(TypedValue.COMPLEX_UNIT_SP, 26);
         title.setTypeface(Typeface.DEFAULT_BOLD);
@@ -274,7 +274,7 @@ public final class MainActivity extends Activity {
         linkInput.setMinLines(5);
         linkInput.setGravity(Gravity.TOP | Gravity.START);
         linkInput.setInputType(InputType.TYPE_CLASS_TEXT | InputType.TYPE_TEXT_FLAG_MULTI_LINE | InputType.TYPE_TEXT_FLAG_NO_SUGGESTIONS);
-        linkInput.setHint("olcrtc://wbstream?datachannel@room#64hex...%default$direct\nили MTS Link: olcrtc://mtslink?seichannel<fps=30&batch=8&frag=700>@https%3A%2F%2Fmy.mts-link.ru%2Fj%2F...#key$profile");
+        linkInput.setHint("olcrtc://wbstream?datachannel@room#64hex...%default$direct\nMTS Link: olcrtc://mtslink?seichannel<fps=30&batch=8&frag=700>@https%3A%2F%2Fmy.mts-link.ru%2Fj%2F...#key$profile\nXray alpha: vless://..., vmess://..., trojan://..., ss://..., xray://base64-json");
         linkInput.setTextColor(Color.parseColor("#111111"));
         linkInput.setHintTextColor(Color.parseColor("#A0A5AE"));
         linkInput.setTextSize(TypedValue.COMPLEX_UNIT_SP, 14);
@@ -394,7 +394,7 @@ public final class MainActivity extends Activity {
                 return;
             }
 
-            OlcUriParser.parse(link);
+            validateProfileLink(link);
             getSharedPreferences(PREFS, MODE_PRIVATE).edit().putString(KEY_LINK, link).apply();
             pendingLink = link;
             applyConnectionState(STATE_CONNECTING, "Проверяю VPN-разрешение...");
@@ -438,7 +438,9 @@ public final class MainActivity extends Activity {
         }
         applyConnectionState(STATE_CONNECTING, "Подключение...");
         setStatus("Подключаюсь...");
-        setDetails("Сервис запущен, жду статуса от olcRTC.");
+        setDetails(XrayProfile.isXray(link)
+                ? "Xray alpha backend started. Waiting for VPN status."
+                : "Сервис запущен, жду статуса от olcRTC.");
     }
 
     private void stopVpn() {
@@ -482,7 +484,9 @@ public final class MainActivity extends Activity {
         hideEditorFocus();
         try {
             String link = linkInput == null ? "" : linkInput.getText().toString().trim();
-            OlcConfig config = OlcUriParser.parse(link);
+            boolean xrayLink = XrayProfile.isXray(link);
+            OlcConfig config = xrayLink ? null : OlcUriParser.parse(link);
+            XrayProfile xrayProfile = xrayLink ? XrayProfile.parse(link, OlcVpnService.SOCKS_PORT) : null;
 
             SharedPreferences prefs = getSharedPreferences(PREFS, MODE_PRIVATE);
             String id = editingProfileId;
@@ -492,13 +496,17 @@ public final class MainActivity extends Activity {
             }
 
             String customName = profileNameInput == null ? "" : profileNameInput.getText().toString().trim();
-            String name = customName.isEmpty() ? buildProfileName(config) : customName;
+            String name = customName.isEmpty()
+                    ? (xrayLink ? buildXrayProfileName(xrayProfile) : buildProfileName(config))
+                    : customName;
+            String carrier = xrayLink ? "xray" : config.carrier;
+            String transport = xrayLink ? xrayProfile.protocol : config.transport;
 
             prefs.edit()
                     .putString("profile_" + id + "_name", name)
                     .putString("profile_" + id + "_link", link)
-                    .putString("profile_" + id + "_carrier", config.carrier)
-                    .putString("profile_" + id + "_transport", config.transport)
+                    .putString("profile_" + id + "_carrier", carrier)
+                    .putString("profile_" + id + "_transport", transport)
                     .putString(KEY_SELECTED_PROFILE_ID, id)
                     .putString(KEY_LINK, link)
                     .apply();
@@ -509,7 +517,11 @@ public final class MainActivity extends Activity {
             refreshProfilesList();
             closeProfileEditor();
             setStatus("Профиль сохранён: " + name);
-            setDetails(config.carrier + " / " + config.transport + (config.hasParams() ? " <" + config.paramsPretty() + ">" : "") + "\nclientId=" + config.clientId);
+            if (xrayLink) {
+                setDetails("xray / " + xrayProfile.protocol + "\n" + shortLink(link));
+            } else {
+                setDetails(config.carrier + " / " + config.transport + (config.hasParams() ? " <" + config.paramsPretty() + ">" : "") + "\nclientId=" + config.clientId);
+            }
         } catch (Exception e) {
             setStatus(humanError("bad_link: " + e.getMessage()));
             setDetails("Profile save error: " + safe(e.getMessage()));
@@ -689,6 +701,21 @@ public final class MainActivity extends Activity {
         return config.carrier + " | " + config.transport;
     }
 
+    private void validateProfileLink(String link) throws Exception {
+        if (XrayProfile.isXray(link)) {
+            XrayProfile.parse(link, OlcVpnService.SOCKS_PORT);
+        } else {
+            OlcUriParser.parse(link);
+        }
+    }
+
+    private String buildXrayProfileName(XrayProfile profile) {
+        if (profile == null) return "xray | alpha";
+        String name = profile.displayName == null ? "" : profile.displayName.trim();
+        if (!name.isEmpty()) return name;
+        return "xray | " + profile.protocol;
+    }
+
     private String shortLink(String link) {
         if (link == null) return "";
         if (link.length() <= 120) return link;
@@ -730,6 +757,10 @@ public final class MainActivity extends Activity {
         String lower = s.toLowerCase();
 
         if (lower.contains("vpn connected")) return "VPN подключён. Трафик идёт через туннель.";
+        if (lower.contains("xray profile accepted")) return "Xray profile accepted. Starting alpha backend.";
+        if (lower.contains("starting xray core")) return "Starting Xray core...";
+        if (lower.contains("xray started")) return "Xray started. Checking local SOCKS.";
+        if (lower.contains("xray keepalive fail")) return "Xray tunnel is unstable. Checking connection.";
         if (lower.contains("отключено")) return "VPN отключён.";
         if (lower.contains("ссылка разобрана")) return "Ссылка принята. Готовлю подключение.";
         if (lower.contains("dns auto")) return "DNS выбран автоматически.";
@@ -762,7 +793,7 @@ public final class MainActivity extends Activity {
         if ((s.contains("seichannel") || s.contains("videochannel")) && (s.contains("setseioptions") || s.contains("setvideooptions") || s.contains("startwithtransport") || s.contains("combo aar"))) return "Нужен свежий combo AAR с поддержкой universal-carrier. Собери scripts/build_combo_aar.sh и пересобери APK.";
         if (s.contains("only datachannel") || s.contains("use datachannel")) return "Эта ссылка не поддерживается этой сборкой. Используй datachannel или vp8channel.";
         if (s.contains("vp8channel") && (s.contains("no startwithtransport") || s.contains("settransport") || s.contains("rebuild app/libs/olcrtccombo.aar"))) return "Нужен свежий combo AAR с поддержкой vp8channel. Собери scripts/build_combo_aar.sh и пересобери APK.";
-        if (s.contains("bad_link") || s.contains("empty olcrtc link")) return "Вставь корректную olcRTC-ссылку.";
+        if (s.contains("bad_link") || s.contains("empty olcrtc link")) return "Вставь корректную olcRTC или Xray-ссылку.";
         if (s.contains("combined mobile aar") || s.contains("combo aar")) return "Core не найден. Собери combo AAR и пересобери APK.";
         if (s.contains("vpn permission") || s.contains("tun establish") || s.contains("permission not granted")) return "Android не разрешил создать VPN-подключение.";
         if (s.contains("stream.wb.ru") && (s.contains("lookup") || s.contains("dns"))) return "DNS не смог найти stream.wb.ru. Проверь сеть или попробуй переподключиться.";

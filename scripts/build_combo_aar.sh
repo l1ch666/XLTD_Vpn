@@ -11,6 +11,10 @@ ANDROID_FFMPEG_VERSION="${ANDROID_FFMPEG_VERSION:-8.1}"
 ANDROID_FFMPEG_ABIS="${ANDROID_FFMPEG_ABIS:-arm64-v8a}"
 ANDROID_FFMPEG_ASSETS_DIR="${PROJECT_ROOT}/app/src/main/assets/ffmpeg"
 ANDROID_FFMPEG_CACHE_DIR="${EXT}/ffmpeg-android"
+ANDROID_XRAY_VERSION="${ANDROID_XRAY_VERSION:-v26.5.9}"
+ANDROID_XRAY_ABIS="${ANDROID_XRAY_ABIS:-arm64-v8a}"
+ANDROID_XRAY_ASSETS_DIR="${PROJECT_ROOT}/app/src/main/assets/xray"
+ANDROID_XRAY_CACHE_DIR="${EXT}/xray-android"
 OLC_REPO="${OLC_REPO:-https://github.com/l1ch666/mtsRTC.git}"
 OLC_REF="${OLC_REF:-mtslink-universal-carrier}"
 OLC_PATCHES="${OLC_PATCHES:-}"
@@ -164,6 +168,76 @@ prepare_android_ffmpeg_assets() {
 }
 
 prepare_android_ffmpeg_assets
+
+android_xray_asset() {
+  case "$1" in
+    arm64-v8a) echo "Xray-android-arm64-v8a.zip" ;;
+    armeabi-v7a) echo "Xray-android-arm32-v7a.zip" ;;
+    x86_64) echo "Xray-android-64.zip" ;;
+    x86) echo "Xray-android-32.zip" ;;
+    *) echo "" ;;
+  esac
+}
+
+prepare_android_xray_assets() {
+  if [ "${ANDROID_XRAY:-1}" = "0" ]; then
+    echo "[*] ANDROID_XRAY=0: skipping bundled Android Xray asset"
+    return
+  fi
+
+  mkdir -p "$ANDROID_XRAY_CACHE_DIR" "$ANDROID_XRAY_ASSETS_DIR"
+  IFS=',' read -ra ABI_LIST <<< "$ANDROID_XRAY_ABIS"
+  for abi in "${ABI_LIST[@]}"; do
+    abi="$(echo "$abi" | xargs)"
+    [ -n "$abi" ] || continue
+
+    asset="$(android_xray_asset "$abi")"
+    if [ -z "$asset" ]; then
+      echo "[X] Unsupported Android ABI for Xray asset: $abi" >&2
+      exit 1
+    fi
+
+    target_dir="${ANDROID_XRAY_ASSETS_DIR}/${abi}"
+    mkdir -p "$target_dir"
+
+    if [ -n "${ANDROID_XRAY_DIR:-}" ] && [ -f "${ANDROID_XRAY_DIR}/${abi}/xray" ]; then
+      cp "${ANDROID_XRAY_DIR}/${abi}/xray" "${target_dir}/xray"
+      [ -f "${ANDROID_XRAY_DIR}/${abi}/geoip.dat" ] && cp "${ANDROID_XRAY_DIR}/${abi}/geoip.dat" "${target_dir}/geoip.dat"
+      [ -f "${ANDROID_XRAY_DIR}/${abi}/geosite.dat" ] && cp "${ANDROID_XRAY_DIR}/${abi}/geosite.dat" "${target_dir}/geosite.dat"
+      chmod 0755 "${target_dir}/xray"
+      echo "[*] Bundled Android Xray from ANDROID_XRAY_DIR for $abi"
+      continue
+    fi
+
+    zip="${ANDROID_XRAY_CACHE_DIR}/${ANDROID_XRAY_VERSION}-${asset}"
+    url="https://github.com/XTLS/Xray-core/releases/download/${ANDROID_XRAY_VERSION}/${asset}"
+    if [ ! -f "$zip" ]; then
+      echo "[*] Downloading Android Xray ${ANDROID_XRAY_VERSION} for $abi..."
+      curl -L --fail --retry 3 -o "$zip" "$url"
+    fi
+
+    extract_dir="${ANDROID_XRAY_CACHE_DIR}/extract-${abi}"
+    rm -rf "$extract_dir"
+    mkdir -p "$extract_dir"
+    extract_zip "$zip" "$extract_dir"
+
+    found="$(find "$extract_dir" -type f -name xray | head -n 1)"
+    if [ -z "$found" ]; then
+      echo "[X] Android Xray archive for $abi did not contain xray" >&2
+      exit 1
+    fi
+    cp "$found" "${target_dir}/xray"
+    chmod 0755 "${target_dir}/xray"
+
+    geoip="$(find "$extract_dir" -type f -name geoip.dat | head -n 1)"
+    geosite="$(find "$extract_dir" -type f -name geosite.dat | head -n 1)"
+    [ -n "$geoip" ] && cp "$geoip" "${target_dir}/geoip.dat"
+    [ -n "$geosite" ] && cp "$geosite" "${target_dir}/geosite.dat"
+    echo "[*] Bundled Android Xray asset: assets/xray/${abi}/xray"
+  done
+}
+
+prepare_android_xray_assets
 
 mkdir -p "${COMBO_DIR}"
 cat > "${COMBO_DIR}/go.mod" <<'EOGO'
@@ -1587,7 +1661,47 @@ func (pc *dnsOverTCPPacketConn) SetWriteDeadline(time.Time) error { return nil }
 
 EOGO
 
-gofmt -w "${COMBO_DIR}/mobile.go"
+GO_BIN="$(command -v go || command -v go.exe || true)"
+if [ -z "$GO_BIN" ]; then
+  for candidate in \
+    "/mnt/c/Program Files/Go/bin/go.exe" \
+    "/c/Program Files/Go/bin/go.exe"; do
+    if [ -x "$candidate" ]; then
+      GO_BIN="$candidate"
+      break
+    fi
+  done
+fi
+if [ -z "$GO_BIN" ]; then
+  echo "[X] Go is required to build olcrtccombo. Add Go to PATH or install it under C:\\Program Files\\Go." >&2
+  exit 1
+fi
+go() {
+  "$GO_BIN" "$@"
+}
+
+GOFMT_BIN="$(command -v gofmt || true)"
+if [ -z "$GOFMT_BIN" ]; then
+  GOFMT_BIN="$(command -v gofmt.exe || true)"
+fi
+if [ -z "$GOFMT_BIN" ]; then
+  GOROOT_PATH="$(go env GOROOT 2>/dev/null || true)"
+  for candidate in \
+    "${GOROOT_PATH}/bin/gofmt" \
+    "${GOROOT_PATH}/bin/gofmt.exe" \
+    "/mnt/c/Program Files/Go/bin/gofmt.exe" \
+    "/c/Program Files/Go/bin/gofmt.exe"; do
+    if [ -x "$candidate" ]; then
+      GOFMT_BIN="$candidate"
+      break
+    fi
+  done
+fi
+if [ -n "$GOFMT_BIN" ]; then
+  "$GOFMT_BIN" -w "${COMBO_DIR}/mobile.go"
+else
+  echo "[!] gofmt not found; continuing with generated mobile.go as-is."
+fi
 
 echo "Installing pinned gomobile/gobind..."
 # Do NOT use @latest here. A newer x/mobile snapshot can be missing/reshuffling

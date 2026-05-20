@@ -8,7 +8,7 @@ $env:DOTNET_CLI_TELEMETRY_OPTOUT = "1"
 $env:DOTNET_NOLOGO = "1"
 
 $projectRoot = Split-Path -Parent $PSScriptRoot
-$version = "0.5.4-beta"
+$version = "0.0.1-alpha"
 $project = Join-Path $projectRoot "windows\XLTD.Vpn.Windows\XLTD.Vpn.Windows.csproj"
 $projectDir = Split-Path -Parent $project
 $toolsDir = Join-Path $projectDir "tools"
@@ -24,6 +24,9 @@ $wintunCacheDir = Join-Path $projectRoot ".external\wintun"
 $wintunZip = Join-Path $wintunCacheDir "wintun-0.14.1.zip"
 $wintunExtractDir = Join-Path $wintunCacheDir "extract"
 $wintunUrl = "https://www.wintun.net/builds/wintun-0.14.1.zip"
+$xrayVersion = if ($env:XRAY_VERSION) { $env:XRAY_VERSION } else { "v26.5.9" }
+$xrayCacheDir = Join-Path $projectRoot ".external\xray"
+$xrayExtractDir = Join-Path $xrayCacheDir "extract"
 $olcrtcPatches = if ($env:OLC_PATCHES) { $env:OLC_PATCHES -split ";" } else { @() }
 $distRoot = Join-Path $projectRoot "dist\windows"
 $publishDir = Join-Path $distRoot "XLTD_Vpn_Windows-$version-$Runtime"
@@ -123,6 +126,41 @@ function Resolve-WintunDll {
     $cached = Join-Path $wintunCacheDir "wintun.dll"
     Copy-Item $wintun.FullName $cached -Force
     return $cached
+}
+
+function Resolve-XrayBundle {
+    $asset = switch -Regex ($Runtime) {
+        "win-x64" { "Xray-windows-64.zip"; break }
+        "win-x86" { "Xray-windows-32.zip"; break }
+        "win-arm64" { "Xray-windows-arm64-v8a.zip"; break }
+        default { throw "Xray alpha packaging currently supports win-x64, win-x86, and win-arm64. Runtime was: $Runtime" }
+    }
+
+    $xrayZip = Join-Path $xrayCacheDir "$xrayVersion-$asset"
+    $xrayUrl = "https://github.com/XTLS/Xray-core/releases/download/$xrayVersion/$asset"
+    New-Item -ItemType Directory -Force -Path $xrayCacheDir | Out-Null
+    if (-not (Test-Path $xrayZip)) {
+        Write-Host "Downloading Xray-core $xrayVersion ($asset)..."
+        Invoke-WebRequest -Uri $xrayUrl -OutFile $xrayZip -UseBasicParsing
+    }
+
+    Reset-Directory $xrayExtractDir
+    Expand-Archive -LiteralPath $xrayZip -DestinationPath $xrayExtractDir -Force
+    $xrayExe = Get-ChildItem -Path $xrayExtractDir -Recurse -Filter xray.exe | Select-Object -First 1
+    $geoip = Get-ChildItem -Path $xrayExtractDir -Recurse -Filter geoip.dat | Select-Object -First 1
+    $geosite = Get-ChildItem -Path $xrayExtractDir -Recurse -Filter geosite.dat | Select-Object -First 1
+    if (-not $xrayExe) {
+        throw "Downloaded Xray archive did not contain xray.exe"
+    }
+    if (-not $geoip -or -not $geosite) {
+        throw "Downloaded Xray archive did not contain geoip.dat/geosite.dat"
+    }
+
+    return @{
+        Xray = $xrayExe.FullName
+        Geoip = $geoip.FullName
+        Geosite = $geosite.FullName
+    }
 }
 
 function Apply-GitPatchIfNeeded([string]$Repo, [string]$Patch) {
@@ -232,6 +270,7 @@ foreach ($patch in $olcrtcPatches) {
 
 $ffmpegSource = Resolve-Ffmpeg
 $wintunSource = Resolve-WintunDll
+$xrayBundle = Resolve-XrayBundle
 
 Reset-Directory $toolsDir
 New-Item -ItemType Directory -Force -Path (Join-Path $toolsDir "data") | Out-Null
@@ -262,6 +301,9 @@ Copy-Item (Join-Path $olcrtcSource "data\names") (Join-Path $toolsDir "data\name
 Copy-Item (Join-Path $olcrtcSource "data\surnames") (Join-Path $toolsDir "data\surnames") -Force
 Copy-Item $ffmpegSource (Join-Path $toolsDir "ffmpeg.exe") -Force
 Copy-Item $wintunSource (Join-Path $toolsDir "wintun.dll") -Force
+Copy-Item $xrayBundle.Xray (Join-Path $toolsDir "xray.exe") -Force
+Copy-Item $xrayBundle.Geoip (Join-Path $toolsDir "geoip.dat") -Force
+Copy-Item $xrayBundle.Geosite (Join-Path $toolsDir "geosite.dat") -Force
 
 Reset-Directory $publishDir
 

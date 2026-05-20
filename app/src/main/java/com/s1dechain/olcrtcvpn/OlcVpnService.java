@@ -34,7 +34,7 @@ public final class OlcVpnService extends VpnService {
     private static final String TAG = "OlcVpnService";
     private static final String CHANNEL_ID = "olcrtc_vpn";
     private static final int NOTIFICATION_ID = 1001;
-    private static final int SOCKS_PORT = 10808;
+    public static final int SOCKS_PORT = 10808;
     private static final int DATA_MTU = 1500;
     // VP8 video transport is more fragile than DataChannel under Android VPN bursts.
     // Keep it below common carrier/video fragmentation pain points.
@@ -78,6 +78,7 @@ public final class OlcVpnService extends VpnService {
     private int detachedTunFd = -1;
     private Tun2SocksMobileBridge tun2socks;
     private OlcMobileBridge olc;
+    private XrayRuntime xray;
     private ConnectivityManager connectivityManager;
     private ConnectivityManager.NetworkCallback networkCallback;
 
@@ -144,7 +145,11 @@ public final class OlcVpnService extends VpnService {
 
     private void runVpnOnce(String link, int generation) {
         try {
-            if (link == null || link.trim().isEmpty()) throw new IllegalArgumentException("empty olcrtc link");
+            if (link == null || link.trim().isEmpty()) throw new IllegalArgumentException("empty profile link");
+            if (XrayProfile.isXray(link)) {
+                runXrayVpnOnce(link, generation);
+                return;
+            }
             OlcConfig config = OlcUriParser.parse(link);
             int tunnelMtu = mtuForTransport(config);
             Log.i(TAG, "Parsed config: " + config.pretty());
@@ -209,7 +214,7 @@ public final class OlcVpnService extends VpnService {
             }
 
             Builder builder = new Builder()
-                    .setSession("olcRTC VPN")
+                    .setSession("XLTD VPN Alpha")
                     .setMtu(tunnelMtu)
                     .addAddress("10.77.0.2", 24)
                     .addRoute("0.0.0.0", 0);
@@ -284,6 +289,89 @@ public final class OlcVpnService extends VpnService {
             startForegroundCompat("Error: " + e.getMessage());
             shutdownResources();
             scheduleReconnectIfNeeded();
+        }
+    }
+
+    private void runXrayVpnOnce(String link, int generation) throws Exception {
+        XrayProfile profile = XrayProfile.parse(link, SOCKS_PORT);
+        int tunnelMtu = DATA_MTU;
+        Log.i(TAG, "Parsed Xray profile: " + profile.protocol + " / " + profile.displayName);
+        sendStatus("Xray profile accepted: " + profile.protocol + " / MTU " + tunnelMtu);
+
+        if (!Tun2SocksMobileBridge.isAvailable()) {
+            throw new IllegalStateException("combined mobile AAR has no StartTun2Socks. Rebuild app/libs/olcrtccombo.aar");
+        }
+
+        sendStatus("Starting Xray core...");
+        xray = XrayRuntime.start(this, profile, SOCKS_PORT);
+        sendStatus("Xray started. Checking local SOCKS 127.0.0.1:" + SOCKS_PORT);
+        if (!waitForLocalSocksReady()) {
+            throw new IllegalStateException("Xray local SOCKS is not ready");
+        }
+
+        Builder builder = new Builder()
+                .setSession("XLTD VPN Xray Alpha")
+                .setMtu(tunnelMtu)
+                .addAddress("10.77.0.2", 24)
+                .addRoute("0.0.0.0", 0);
+
+        String androidDnsPolicy = configureAndroidDnsPolicy(builder);
+
+        try {
+            builder.addDisallowedApplication(getPackageName());
+            Log.i(TAG, "Excluded self package from VPN: " + getPackageName());
+        } catch (Exception e) {
+            Log.w(TAG, "Failed to exclude self package from VPN", e);
+        }
+
+        tunFd = builder.establish();
+        if (tunFd == null) throw new IllegalStateException("VPN permission not granted or TUN establish failed");
+
+        String tunnelDnsUpstream = TUNNEL_DNS_CLOUDFLARE;
+        int rawTunFd = tunFd.detachFd();
+        tunFd = null;
+        detachedTunFd = rawTunFd;
+        tun2socks = new Tun2SocksMobileBridge();
+        tun2socks.start(rawTunFd, "socks5://127.0.0.1:" + SOCKS_PORT, tunnelMtu, "info", tunnelDnsUpstream, DATA_TCP_DIAL_LIMIT);
+        tunEstablished = true;
+
+        reconnectAttempt = 0;
+        startForegroundCompat("Connected");
+        Log.i(TAG, "Xray VPN connected");
+        sendStatus("VPN connected\n" +
+                "Backend: Xray " + profile.protocol + "\n" +
+                androidDnsPolicy + "\n" +
+                "Local DNS hijack: " + tunnelDnsUpstream + " direct from Android app if DNS enters TUN\n" +
+                "MTU: " + tunnelMtu + "\n" +
+                "TCP start limiter: " + DATA_TCP_DIAL_LIMIT + " parallel dials\n" +
+                "UDP 443 / TCP 853: drop\n" +
+                "Keepalive: local SOCKS/Xray every " + (KEEPALIVE_INTERVAL_MS / 1000) + "s");
+
+        registerNetworkCallback();
+
+        long lastKeepAliveAt = 0L;
+        while (!stopRequested && generation == workerGeneration && !restartRequested) {
+            try { Thread.sleep(5000); } catch (InterruptedException ignored) {}
+            if (stopRequested || generation != workerGeneration || restartRequested) break;
+
+            if (xray == null || !xray.isRunning()) {
+                throw new IllegalStateException("Xray core stopped");
+            }
+
+            long now = System.currentTimeMillis();
+            if (now - lastKeepAliveAt >= KEEPALIVE_INTERVAL_MS) {
+                lastKeepAliveAt = now;
+                if (runLocalSocksHandshakeProbe(LOCAL_SOCKS_PROBE_TIMEOUT_MS)) {
+                    keepAliveFailures = 0;
+                } else {
+                    keepAliveFailures++;
+                    Log.w(TAG, "xray keepalive failed " + keepAliveFailures + "/" + KEEPALIVE_MAX_FAILURES);
+                    sendStatus("Xray keepalive fail " + keepAliveFailures + "/" + KEEPALIVE_MAX_FAILURES);
+                    if (keepAliveFailures >= KEEPALIVE_MAX_FAILURES) {
+                        throw new IllegalStateException("Xray keepalive failed " + KEEPALIVE_MAX_FAILURES + " times");
+                    }
+                }
+            }
         }
     }
 
@@ -888,7 +976,7 @@ public final class OlcVpnService extends VpnService {
 
     private void startForegroundCompat(String text) {
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
-            NotificationChannel channel = new NotificationChannel(CHANNEL_ID, "olcRTC VPN", NotificationManager.IMPORTANCE_LOW);
+            NotificationChannel channel = new NotificationChannel(CHANNEL_ID, "XLTD VPN Alpha", NotificationManager.IMPORTANCE_LOW);
             NotificationManager nm = getSystemService(NotificationManager.class);
             if (nm != null) nm.createNotificationChannel(channel);
         }
@@ -906,7 +994,7 @@ public final class OlcVpnService extends VpnService {
         PendingIntent contentIntent = PendingIntent.getActivity(this, 0, openIntent, pendingFlags);
 
         Notification notification = builder
-                .setContentTitle("olcRTC VPN")
+                .setContentTitle("XLTD VPN Alpha")
                 .setContentText(text)
                 .setSmallIcon(android.R.drawable.stat_sys_download_done)
                 .setContentIntent(contentIntent)
@@ -926,6 +1014,10 @@ public final class OlcVpnService extends VpnService {
         if (olc != null) {
             olc.stop();
             olc = null;
+        }
+        if (xray != null) {
+            xray.stop();
+            xray = null;
         }
         if (tunFd != null) {
             try { tunFd.close(); } catch (Exception ignored) {}

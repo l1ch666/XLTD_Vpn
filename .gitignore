@@ -4,6 +4,9 @@ app/build/
 app/libs/*.aar
 app/libs/*-sources.jar
 app/src/main/assets/ffmpeg/*/ffmpeg
+app/src/main/assets/xray/*/xray
+app/src/main/assets/xray/*/geoip.dat
+app/src/main/assets/xray/*/geosite.dat
 dist/
 .external/
 .tmp/

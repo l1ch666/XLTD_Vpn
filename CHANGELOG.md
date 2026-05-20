@@ -1,5 +1,14 @@
 # Changelog
 
+## XLTD VPN 0.0.1-alpha
+
+- Added an isolated Xray backend branch for Android and Windows without replacing the existing olcRTC backend.
+- Added Xray profile parsing for `vless://`, `vmess://`, `trojan://`, `ss://`, `socks://`, `http-proxy://`, `xray://` encoded JSON, and raw JSON configs.
+- Added stream-setting support for TLS, Reality, TCP, WebSocket, gRPC, HTTP/H2, XHTTP/SplitHTTP, KCP, and QUIC profile parameters.
+- Android now bundles an official native Xray-core asset and runs it through the existing full-VPN tun2socks path.
+- Windows now packages `xray.exe`, `geoip.dat`, and `geosite.dat`, and can start Xray profiles through the same local SOCKS/proxy/full-tunnel UI.
+- Build scripts pin Xray-core to `v26.5.9` and produce `0.0.1-alpha` artifacts for both platforms.
+
 ## 1.9.4-universal-carrier
 
 - Raised the MTS Link traffic payload floor dynamically to `frag * 8` instead of keeping the old 1200-byte profile cap that could terminate the control stream at 1208-byte frames.
