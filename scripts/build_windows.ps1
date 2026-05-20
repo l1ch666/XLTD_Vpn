@@ -8,7 +8,7 @@ $env:DOTNET_CLI_TELEMETRY_OPTOUT = "1"
 $env:DOTNET_NOLOGO = "1"
 
 $projectRoot = Split-Path -Parent $PSScriptRoot
-$version = "0.5.3-beta"
+$version = "0.5.4-beta"
 $project = Join-Path $projectRoot "windows\XLTD.Vpn.Windows\XLTD.Vpn.Windows.csproj"
 $projectDir = Split-Path -Parent $project
 $toolsDir = Join-Path $projectDir "tools"

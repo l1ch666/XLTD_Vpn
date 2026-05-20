@@ -1,5 +1,15 @@
 # Changelog
 
+## 1.9.4-universal-carrier
+
+- Raised the MTS Link traffic payload floor dynamically to `frag * 8` instead of keeping the old 1200-byte profile cap that could terminate the control stream at 1208-byte frames.
+- Older saved MTS Link profiles with `traffic-max-payload=1200` are auto-raised by the Android bridge.
+
+## Windows 0.5.4-beta
+
+- Applied the same dynamic MTS Link traffic payload floor to generated Windows core configs.
+- Full tunnel now routes selected DNS server host routes outside the TUN adapter and uses short UDP sessions to reduce UDP-over-SOCKS5 failure storms.
+
 ## 1.9.3-universal-carrier
 
 - Switched Android core builds to `l1ch666/mtsRTC` `mtslink-universal-carrier` instead of applying the MTS patch onto fresh upstream.

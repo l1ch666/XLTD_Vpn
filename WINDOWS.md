@@ -28,7 +28,7 @@ powershell -ExecutionPolicy Bypass -File scripts/build_windows.ps1
 Output:
 
 ```text
-dist/windows/XLTD_Vpn-Windows-0.5.3-beta-win-x64.zip
+dist/windows/XLTD_Vpn-Windows-0.5.4-beta-win-x64.zip
 ```
 
 The package contains:
@@ -51,7 +51,7 @@ powershell -ExecutionPolicy Bypass -File scripts/build_windows.ps1 -SelfContaine
 
 Feature parity changes should move Android and Windows in parallel by intent, but each platform keeps its own patch number:
 
-- Android: `1.9.3`, `2.0.0`, etc.
-- Windows: `0.5.3-beta`, `0.6.0-beta`, etc.
+- Android: `1.9.4`, `2.0.0`, etc.
+- Windows: `0.5.4-beta`, `0.6.0-beta`, etc.
 
 Small platform-only bugfixes update only the platform they touch.

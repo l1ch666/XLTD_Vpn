@@ -1151,8 +1151,14 @@ func applyCarrierRuntimeDefaults(carrierName string, cfg mobileConfig) mobileCon
 		if cfg.livenessFailures <= 0 {
 			cfg.livenessFailures = 6
 		}
+		payloadFloor := cfg.seiFragmentSize * 8
+		if payloadFloor < 1600 {
+			payloadFloor = 1600
+		}
 		if cfg.trafficMaxPayload <= 0 {
-			cfg.trafficMaxPayload = 1200
+			cfg.trafficMaxPayload = payloadFloor
+		} else if cfg.trafficMaxPayload < payloadFloor {
+			cfg.trafficMaxPayload = payloadFloor
 		}
 		if cfg.trafficMinDelayMS <= 0 {
 			cfg.trafficMinDelayMS = 4

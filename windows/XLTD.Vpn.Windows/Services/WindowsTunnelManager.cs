@@ -11,6 +11,7 @@ internal sealed class WindowsTunnelManager : IDisposable
 
     private Process? process;
     private int? interfaceIndex;
+    private readonly List<DnsBypassRoute> dnsBypassRoutes = new();
 
     public event Action<string>? LogLine;
 
@@ -34,7 +35,7 @@ internal sealed class WindowsTunnelManager : IDisposable
         var exe = ResolveToolPath("tun2socks.exe");
         var toolsDir = Path.GetDirectoryName(exe) ?? AppContext.BaseDirectory;
         _ = ResolveToolPath("wintun.dll");
-        var args = $"--device tun://{AdapterName} --proxy socks5://{AppInfo.DefaultSocksHost}:{socksPort} --mtu {mtu} --loglevel info";
+        var args = $"--device tun://{AdapterName} --proxy socks5://{AppInfo.DefaultSocksHost}:{socksPort} --mtu {mtu} --udp-timeout 1s --loglevel info";
         var startInfo = new ProcessStartInfo
         {
             FileName = exe,
@@ -102,6 +103,7 @@ internal sealed class WindowsTunnelManager : IDisposable
 
     private void ConfigureInterface()
     {
+        dnsBypassRoutes.Clear();
         var script = $$"""
 $ErrorActionPreference = 'Stop'
 $adapter = Get-NetAdapter -Name '{{AdapterName}}' -ErrorAction SilentlyContinue
@@ -110,9 +112,30 @@ if ($null -eq $adapter) {
 }
 if ($null -eq $adapter) { throw 'TUN adapter was not found after tun2socks start' }
 $idx = $adapter.ifIndex
+$defaultRoute = Get-NetRoute -DestinationPrefix '0.0.0.0/0' -AddressFamily IPv4 -ErrorAction SilentlyContinue |
+    Where-Object { $_.NextHop -and $_.NextHop -ne '0.0.0.0' -and $_.InterfaceIndex -ne $idx } |
+    Sort-Object RouteMetric |
+    Select-Object -First 1
+$dnsServers = @()
+if ($null -ne $defaultRoute) {
+    $dnsServers = @(Get-DnsClientServerAddress -InterfaceIndex $defaultRoute.InterfaceIndex -AddressFamily IPv4 -ErrorAction SilentlyContinue).ServerAddresses |
+        Where-Object { $_ -match '^\d{1,3}(\.\d{1,3}){3}$' } |
+        Select-Object -Unique
+}
+if ($dnsServers.Count -eq 0) { $dnsServers = @('1.1.1.1','8.8.8.8') }
 Get-NetIPAddress -InterfaceIndex $idx -AddressFamily IPv4 -ErrorAction SilentlyContinue | Remove-NetIPAddress -Confirm:$false -ErrorAction SilentlyContinue
 New-NetIPAddress -InterfaceIndex $idx -IPAddress '{{TunAddress}}' -PrefixLength {{PrefixLength}} -AddressFamily IPv4 | Out-Null
-Set-DnsClientServerAddress -InterfaceIndex $idx -ServerAddresses ('1.1.1.1','8.8.8.8')
+Set-DnsClientServerAddress -InterfaceIndex $idx -ServerAddresses $dnsServers
+if ($null -ne $defaultRoute) {
+    foreach ($dns in $dnsServers) {
+        $prefix = "$dns/32"
+        Get-NetRoute -InterfaceIndex $defaultRoute.InterfaceIndex -DestinationPrefix $prefix -NextHop $defaultRoute.NextHop -ErrorAction SilentlyContinue |
+            Where-Object { $_.RouteMetric -eq 1 } |
+            Remove-NetRoute -Confirm:$false -ErrorAction SilentlyContinue
+        New-NetRoute -InterfaceIndex $defaultRoute.InterfaceIndex -DestinationPrefix $prefix -NextHop $defaultRoute.NextHop -RouteMetric 1 -PolicyStore ActiveStore | Out-Null
+        Write-Output "DNSROUTE|$prefix|$($defaultRoute.InterfaceIndex)|$($defaultRoute.NextHop)"
+    }
+}
 Get-NetRoute -InterfaceIndex $idx -DestinationPrefix '0.0.0.0/1' -ErrorAction SilentlyContinue | Remove-NetRoute -Confirm:$false -ErrorAction SilentlyContinue
 Get-NetRoute -InterfaceIndex $idx -DestinationPrefix '128.0.0.0/1' -ErrorAction SilentlyContinue | Remove-NetRoute -Confirm:$false -ErrorAction SilentlyContinue
 New-NetRoute -InterfaceIndex $idx -DestinationPrefix '0.0.0.0/1' -NextHop '0.0.0.0' -RouteMetric 1 | Out-Null
@@ -121,19 +144,40 @@ Write-Output $idx
 """;
 
         var output = RunPowerShell(script);
-        var last = output.Split(new[] { "\r\n", "\n" }, StringSplitOptions.RemoveEmptyEntries).LastOrDefault();
-        if (int.TryParse(last, out var idx)) interfaceIndex = idx;
+        foreach (var line in output.Split(new[] { "\r\n", "\n" }, StringSplitOptions.RemoveEmptyEntries))
+        {
+            if (line.StartsWith("DNSROUTE|", StringComparison.Ordinal))
+            {
+                var parts = line.Split('|');
+                if (parts.Length == 4 && int.TryParse(parts[2], out var dnsIfIndex))
+                {
+                    dnsBypassRoutes.Add(new DnsBypassRoute(parts[1], dnsIfIndex, parts[3]));
+                }
+                continue;
+            }
+            if (int.TryParse(line, out var idx))
+            {
+                interfaceIndex = idx;
+            }
+        }
         Publish("full tunnel routes applied on interface " + (interfaceIndex?.ToString() ?? "unknown"));
+        if (dnsBypassRoutes.Count > 0)
+        {
+            Publish("DNS is routed outside the TUN adapter to avoid UDP over SOCKS5");
+        }
     }
 
     private void RestoreInterface()
     {
         if (interfaceIndex == null) return;
         var idx = interfaceIndex.Value;
+        var dnsRouteRemoval = string.Join(Environment.NewLine, dnsBypassRoutes.Select(route =>
+            $"Get-NetRoute -InterfaceIndex {route.InterfaceIndex} -DestinationPrefix {PowerShellLiteral(route.Prefix)} -NextHop {PowerShellLiteral(route.NextHop)} -ErrorAction SilentlyContinue | Where-Object {{ $_.RouteMetric -eq 1 }} | Remove-NetRoute -Confirm:$false -ErrorAction SilentlyContinue"));
         var script = $$"""
 $idx = {{idx}}
 Get-NetRoute -InterfaceIndex $idx -DestinationPrefix '0.0.0.0/1' -ErrorAction SilentlyContinue | Remove-NetRoute -Confirm:$false -ErrorAction SilentlyContinue
 Get-NetRoute -InterfaceIndex $idx -DestinationPrefix '128.0.0.0/1' -ErrorAction SilentlyContinue | Remove-NetRoute -Confirm:$false -ErrorAction SilentlyContinue
+{{dnsRouteRemoval}}
 Get-NetIPAddress -InterfaceIndex $idx -IPAddress '{{TunAddress}}' -ErrorAction SilentlyContinue | Remove-NetIPAddress -Confirm:$false -ErrorAction SilentlyContinue
 Set-DnsClientServerAddress -InterfaceIndex $idx -ResetServerAddresses -ErrorAction SilentlyContinue
 """;
@@ -150,6 +194,7 @@ Set-DnsClientServerAddress -InterfaceIndex $idx -ResetServerAddresses -ErrorActi
         finally
         {
             interfaceIndex = null;
+            dnsBypassRoutes.Clear();
         }
     }
 
@@ -192,8 +237,15 @@ Set-DnsClientServerAddress -InterfaceIndex $idx -ResetServerAddresses -ErrorActi
         return "\"" + value.Replace("\"", "\\\"") + "\"";
     }
 
+    private static string PowerShellLiteral(string value)
+    {
+        return "'" + value.Replace("'", "''") + "'";
+    }
+
     private void Publish(string? line)
     {
         if (!string.IsNullOrWhiteSpace(line)) LogLine?.Invoke(line);
     }
+
+    private readonly record struct DnsBypassRoute(string Prefix, int InterfaceIndex, string NextHop);
 }
