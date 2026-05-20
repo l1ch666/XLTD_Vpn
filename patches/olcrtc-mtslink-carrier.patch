@@ -1,13 +1,13 @@
-diff --git a/internal/app/session/session.go b/internal/app/session/session.go
-index e9b3226..e4c817f 100644
+﻿diff --git a/internal/app/session/session.go b/internal/app/session/session.go
+index b66847e..da5afb4 100644
 --- a/internal/app/session/session.go
 +++ b/internal/app/session/session.go
-@@ -64,7 +64,7 @@ var (
+@@ -63,7 +63,7 @@ var (
  	ErrAmountRequired = errors.New("amount required for gen mode (set gen.amount)")
  	// ErrAuthRequired indicates that no auth provider was selected.
  	ErrAuthRequired = errors.New(
--		"auth provider required (set auth.provider to jitsi, telemost, jazz, wbstream or none)")
-+		"auth provider required (set auth.provider to jitsi, telemost, jazz, wbstream, mtslink or none)")
+-		"auth provider required (set auth.provider to jitsi, telemost, wbstream or none)")
++		"auth provider required (set auth.provider to jitsi, telemost, wbstream, mtslink or none)")
  	// ErrURLRequired indicates that auth.url must be provided when the auth provider has no default URL.
  	ErrURLRequired = errors.New("SFU URL required (set auth.url)")
  	// ErrUnsupportedCarrier indicates that carrier is not registered.
@@ -1197,28 +1197,60 @@ index 0000000..77e8b6e
 +func authErrRoomRequired() error {
 +	return fmt.Errorf("mtslink: room URL required")
 +}
+diff --git a/internal/client/client.go b/internal/client/client.go
+index 5a92388..245ee63 100644
+--- a/internal/client/client.go
++++ b/internal/client/client.go
+@@ -27,6 +27,11 @@ import (
+ 	"github.com/xtaci/smux"
+ )
+ 
++const (
++	connectRequestWriteTimeout = 30 * time.Second
++	connectRequestAckTimeout   = 30 * time.Second
++)
++
+ var (
+ 	// ErrConnectFailed is returned when a tunnel connection fails.
+ 	ErrConnectFailed = errors.New("tunnel connection failed")
+@@ -634,14 +639,14 @@ func (c *Client) sendConnectRequest(stream *smux.Stream, targetAddr string, targ
+ 		return fmt.Errorf("sid=%d marshal connect req: %w", stream.ID(), err)
+ 	}
+ 
+-	_ = stream.SetWriteDeadline(time.Now().Add(10 * time.Second))
++	_ = stream.SetWriteDeadline(time.Now().Add(connectRequestWriteTimeout))
+ 	if _, err := stream.Write(connectReq); err != nil {
+ 		return fmt.Errorf("sid=%d write connect req: %w", stream.ID(), err)
+ 	}
+ 	_ = stream.SetWriteDeadline(time.Time{})
+ 
+ 	ack := make([]byte, 1)
+-	_ = stream.SetReadDeadline(time.Now().Add(15 * time.Second))
++	_ = stream.SetReadDeadline(time.Now().Add(connectRequestAckTimeout))
+ 	if _, err := io.ReadFull(stream, ack); err != nil || ack[0] != 0x00 {
+ 		return fmt.Errorf("sid=%d: %w (read_err=%w ack=%v)", stream.ID(), ErrRemoteNotReady, err, ack)
+ 	}
 diff --git a/internal/engine/builtin/builtin.go b/internal/engine/builtin/builtin.go
-index 29d3b15..6a61f22 100644
+index da52506..cf6da5e 100644
 --- a/internal/engine/builtin/builtin.go
 +++ b/internal/engine/builtin/builtin.go
-@@ -13,6 +13,7 @@ import (
+@@ -13,12 +13,14 @@ import (
  
  	"github.com/openlibrecommunity/olcrtc/internal/auth"
  	authJitsi "github.com/openlibrecommunity/olcrtc/internal/auth/jitsi"
 +	authMTSLink "github.com/openlibrecommunity/olcrtc/internal/auth/mtslink"
- 	authSaluteJazz "github.com/openlibrecommunity/olcrtc/internal/auth/salutejazz"
  	authTelemost "github.com/openlibrecommunity/olcrtc/internal/auth/telemost"
  	authWBStream "github.com/openlibrecommunity/olcrtc/internal/auth/wbstream"
-@@ -20,6 +21,7 @@ import (
- 	_ "github.com/openlibrecommunity/olcrtc/internal/engine/goolom"     // register goolom engine via init
- 	_ "github.com/openlibrecommunity/olcrtc/internal/engine/jitsi"      // register jitsi engine via init
- 	_ "github.com/openlibrecommunity/olcrtc/internal/engine/livekit"    // register livekit engine via init
-+	_ "github.com/openlibrecommunity/olcrtc/internal/engine/mtslink"    // register mtslink engine via init
- 	_ "github.com/openlibrecommunity/olcrtc/internal/engine/salutejazz" // register salutejazz engine via init
+ 	"github.com/openlibrecommunity/olcrtc/internal/engine"
+ 	_ "github.com/openlibrecommunity/olcrtc/internal/engine/goolom"  // register goolom engine via init
+ 	_ "github.com/openlibrecommunity/olcrtc/internal/engine/jitsi"   // register jitsi engine via init
+ 	_ "github.com/openlibrecommunity/olcrtc/internal/engine/livekit" // register livekit engine via init
++	_ "github.com/openlibrecommunity/olcrtc/internal/engine/mtslink" // register mtslink engine via init
  )
  
-@@ -82,6 +84,7 @@ func RegisterDefaults() {
- 	registerEngineAuth("jazz", authSaluteJazz.Provider{})
+ // ErrCarrierNotFound is returned when an unregistered carrier name is requested.
+@@ -79,6 +81,7 @@ func RegisterDefaults() {
+ 	registerEngineAuth("wbstream", authWBStream.Provider{})
  	registerEngineAuth("telemost", authTelemost.Provider{})
  	registerEngineAuth("jitsi", authJitsi.Provider{})
 +	registerEngineAuth("mtslink", authMTSLink.Provider{})
@@ -2062,6 +2094,478 @@ index 0000000..8792929
 +func init() { //nolint:gochecknoinits // engine registration is the canonical Go pattern for plugins
 +	engine.Register("mtslink", New)
 +}
+diff --git a/internal/server/server.go b/internal/server/server.go
+index 587e1df..30d1edd 100644
+--- a/internal/server/server.go
++++ b/internal/server/server.go
+@@ -24,7 +24,10 @@ import (
+ 	"github.com/xtaci/smux"
+ )
+ 
+-const connectCommand = "connect"
++const (
++	connectCommand            = "connect"
++	connectRequestReadTimeout = 30 * time.Second
++)
+ 
+ var (
+ 	// ErrKeyRequired re-exports runtime.ErrKeyRequired for compatibility with
+@@ -795,7 +798,7 @@ func (s *Server) handleStream(_ context.Context, stream *smux.Stream, sessionID
+ 	const maxConnReq = 4096
+ 	header := make([]byte, 0, 256)
+ 	tmp := make([]byte, 256)
+-	_ = stream.SetReadDeadline(time.Now().Add(15 * time.Second))
++	_ = stream.SetReadDeadline(time.Now().Add(connectRequestReadTimeout))
+ 	for {
+ 		n, err := stream.Read(tmp)
+ 		if n > 0 {
+diff --git a/internal/transport/seichannel/fragack.go b/internal/transport/seichannel/fragack.go
+new file mode 100644
+index 0000000..572d6ff
+--- /dev/null
++++ b/internal/transport/seichannel/fragack.go
+@@ -0,0 +1,94 @@
++package seichannel
++
++import "sync"
++
++// fragAckTracker tracks acknowledgements for individual SEI fragments.
++//
++// SEI frames travel over a lossy video path: one missing fragment should not
++// force the sender to retransmit the whole message. The sender registers the
++// fragment count for a sequence number, the receive loop marks every decoded
++// fragment, and Send retries only what is still pending.
++type fragAckTracker struct {
++	mu      sync.Mutex
++	pending map[uint32]*fragWaiter
++}
++
++type fragWaiter struct {
++	mu        sync.Mutex
++	crc       uint32
++	total     int
++	acked     []bool
++	remaining int
++	notify    chan struct{}
++}
++
++func newFragAckTracker() *fragAckTracker {
++	return &fragAckTracker{pending: make(map[uint32]*fragWaiter)}
++}
++
++func (t *fragAckTracker) Register(seq, crc uint32, total int) *fragWaiter {
++	w := &fragWaiter{
++		crc:       crc,
++		total:     total,
++		acked:     make([]bool, total),
++		remaining: total,
++		notify:    make(chan struct{}, 1),
++	}
++	t.mu.Lock()
++	t.pending[seq] = w
++	t.mu.Unlock()
++	return w
++}
++
++func (t *fragAckTracker) Unregister(seq uint32) {
++	t.mu.Lock()
++	delete(t.pending, seq)
++	t.mu.Unlock()
++}
++
++func (t *fragAckTracker) Mark(seq, crc uint32, fragIdx int) bool {
++	t.mu.Lock()
++	w, ok := t.pending[seq]
++	t.mu.Unlock()
++	if !ok {
++		return false
++	}
++
++	w.mu.Lock()
++	if w.crc != crc || fragIdx < 0 || fragIdx >= w.total || w.acked[fragIdx] {
++		w.mu.Unlock()
++		return false
++	}
++	w.acked[fragIdx] = true
++	w.remaining--
++	w.mu.Unlock()
++
++	select {
++	case w.notify <- struct{}{}:
++	default:
++	}
++	return true
++}
++
++func (w *fragWaiter) Pending() []int {
++	w.mu.Lock()
++	defer w.mu.Unlock()
++
++	out := make([]int, 0, w.remaining)
++	for idx, acked := range w.acked {
++		if !acked {
++			out = append(out, idx)
++		}
++	}
++	return out
++}
++
++func (w *fragWaiter) Done() bool {
++	w.mu.Lock()
++	defer w.mu.Unlock()
++	return w.remaining == 0
++}
++
++func (w *fragWaiter) Notify() <-chan struct{} {
++	return w.notify
++}
+diff --git a/internal/transport/seichannel/frame_extra_test.go b/internal/transport/seichannel/frame_extra_test.go
+index 72f8a73..7437305 100644
+--- a/internal/transport/seichannel/frame_extra_test.go
++++ b/internal/transport/seichannel/frame_extra_test.go
+@@ -24,13 +24,22 @@ func TestDecodeTransportFrameErrorsAndAck(t *testing.T) {
+ 		}
+ 	}
+ 
+-	ack, err := decodeTransportFrame(encodeAckFrame(7, 0x1234))
++	ack, err := decodeTransportFrame(encodeAckFrame(7, 0x1234, 5))
+ 	if err != nil {
+ 		t.Fatalf("decode ack error = %v", err)
+ 	}
+-	if ack.typ != frameTypeAck || ack.seq != 7 || ack.crc != 0x1234 {
++	if ack.typ != frameTypeAck || ack.seq != 7 || ack.crc != 0x1234 || ack.fragIdx != 5 {
+ 		t.Fatalf("ack = %+v", ack)
+ 	}
++
++	legacyAck := []byte{0x4f, 0x56, 0x43, 0x31, protocolVersion, frameTypeAck, 0, 0, 0, 8, 0, 0, 0, 9}
++	ack, err = decodeTransportFrame(legacyAck)
++	if err != nil {
++		t.Fatalf("decode legacy ack error = %v", err)
++	}
++	if ack.seq != 8 || ack.crc != 9 || ack.fragIdx != 0 {
++		t.Fatalf("legacy ack = %+v", ack)
++	}
+ }
+ 
+ func TestSEIHelpersAndErrors(t *testing.T) {
+diff --git a/internal/transport/seichannel/inbound_test.go b/internal/transport/seichannel/inbound_test.go
+index c78a81a..ff58100 100644
+--- a/internal/transport/seichannel/inbound_test.go
++++ b/internal/transport/seichannel/inbound_test.go
+@@ -30,6 +30,7 @@ func TestInboundAssemblyAndAck(t *testing.T) {
+ 	if len(got) != 0 {
+ 		t.Fatalf("onData called before message complete: %q", got)
+ 	}
++	assertNextAck(t, tr.outboundAck, 1, crc, 1)
+ 
+ 	tr.handleInboundFrame(transportFrame{
+ 		typ:       frameTypeData,
+@@ -43,15 +44,7 @@ func TestInboundAssemblyAndAck(t *testing.T) {
+ 	if !bytes.Equal(got, payload) {
+ 		t.Fatalf("assembled payload = %q, want %q", got, payload)
+ 	}
+-	select {
+-	case ack := <-tr.outboundAck:
+-		frame, err := decodeTransportFrame(ack)
+-		if err != nil || frame.typ != frameTypeAck || frame.seq != 1 || frame.crc != crc {
+-			t.Fatalf("ack frame = %+v err=%v", frame, err)
+-		}
+-	default:
+-		t.Fatal("handleInboundFrame() did not enqueue ack")
+-	}
++	assertNextAck(t, tr.outboundAck, 1, crc, 0)
+ 
+ 	got = nil
+ 	tr.handleInboundFrame(transportFrame{
+@@ -66,6 +59,7 @@ func TestInboundAssemblyAndAck(t *testing.T) {
+ 	if got != nil {
+ 		t.Fatalf("duplicate delivered payload again: %q", got)
+ 	}
++	assertNextAck(t, tr.outboundAck, 1, crc, 0)
+ }
+ 
+ func TestInboundRejectsBadCRC(t *testing.T) {
+@@ -88,3 +82,16 @@ func TestInboundRejectsBadCRC(t *testing.T) {
+ 		t.Fatal("handleInboundFrame() delivered payload with bad crc")
+ 	}
+ }
++
++func assertNextAck(t *testing.T, ch <-chan []byte, seq, crc uint32, fragIdx uint16) {
++	t.Helper()
++	select {
++	case ack := <-ch:
++		frame, err := decodeTransportFrame(ack)
++		if err != nil || frame.typ != frameTypeAck || frame.seq != seq || frame.crc != crc || frame.fragIdx != fragIdx {
++			t.Fatalf("ack frame = %+v err=%v, want seq=%d crc=%d frag=%d", frame, err, seq, crc, fragIdx)
++		}
++	default:
++		t.Fatal("handleInboundFrame() did not enqueue ack")
++	}
++}
+diff --git a/internal/transport/seichannel/transport.go b/internal/transport/seichannel/transport.go
+index eea5259..4befee2 100644
+--- a/internal/transport/seichannel/transport.go
++++ b/internal/transport/seichannel/transport.go
+@@ -29,7 +29,7 @@ const (
+ 	defaultFPS                   = 20
+ 	defaultBatchSize             = 1
+ 	defaultConnectTimeout        = 30 * time.Second
+-	maxSendAttempts              = 4
++	maxSendAttempts              = 8
+ 	sampleBuilderMaxLate         = 128
+ 	protocolMagic         uint32 = 0x4f564331 // OVC1
+ 	protocolVersion       byte   = 1
+@@ -97,7 +97,7 @@ type streamTransport struct {
+ 	peerReady     atomic.Bool
+ 	sendMu        sync.Mutex
+ 	startWriter   sync.Once
+-	acks          *common.AckRegistry
++	acks          *fragAckTracker
+ 	reassembler   *common.Reassembler
+ 	fragmentSize  int
+ 	ackTimeout    time.Duration
+@@ -159,7 +159,7 @@ func New(ctx context.Context, cfg transport.Config) (transport.Transport, error)
+ 		outboundAck:   make(chan []byte, 64),
+ 		closeCh:       make(chan struct{}),
+ 		writerDone:    make(chan struct{}),
+-		acks:          common.NewAckRegistry(),
++		acks:          newFragAckTracker(),
+ 		reassembler:   common.NewReassembler(256),
+ 		fragmentSize:  opts.FragmentSize,
+ 		ackTimeout:    time.Duration(opts.AckTimeoutMS) * time.Millisecond,
+@@ -204,32 +204,53 @@ func (p *streamTransport) Send(data []byte) error {
+ 	seq := p.nextSeq.Add(1)
+ 	crc := crc32.ChecksumIEEE(data)
+ 	fragments := common.FragmentPayload(data, p.effectiveFragmentSize())
+-	waiter := p.acks.Register(seq)
++	waiter := p.acks.Register(seq, crc, len(fragments))
+ 	defer p.acks.Unregister(seq)
+ 
++	pending := make([]int, len(fragments))
++	for idx := range pending {
++		pending[idx] = idx
++	}
++
+ 	for range maxSendAttempts {
+-		for idx, fragment := range fragments {
+-			frame := encodeDataFrame(seq, crc, len(data), idx, len(fragments), fragment)
++		for _, idx := range pending {
++			frame := encodeDataFrame(seq, crc, len(data), idx, len(fragments), fragments[idx])
+ 			if err := p.enqueueFrame(frame, false); err != nil {
+ 				return err
+ 			}
+ 		}
+ 
+-		timer := time.NewTimer(p.effectiveAckTimeout())
++		if ok, err := p.awaitFragments(waiter, p.perAttemptAckTimeout(len(pending))); err != nil {
++			return err
++		} else if ok {
++			return nil
++		}
++
++		pending = waiter.Pending()
++		if len(pending) == 0 {
++			return nil
++		}
++	}
++
++	return ErrAckTimeout
++}
++
++func (p *streamTransport) awaitFragments(waiter *fragWaiter, timeout time.Duration) (bool, error) {
++	timer := time.NewTimer(timeout)
++	defer timer.Stop()
++
++	for {
++		if waiter.Done() {
++			return true, nil
++		}
+ 		select {
+-		case ackCRC := <-waiter:
+-			timer.Stop()
+-			if ackCRC == crc {
+-				return nil
+-			}
++		case <-waiter.Notify():
+ 		case <-timer.C:
++			return waiter.Done(), nil
+ 		case <-p.closeCh:
+-			timer.Stop()
+-			return ErrTransportClosed
++			return false, ErrTransportClosed
+ 		}
+ 	}
+-
+-	return ErrAckTimeout
+ }
+ 
+ // Close terminates the transport.
+@@ -309,6 +330,27 @@ func (p *streamTransport) effectiveBatchSize() int {
+ 	return p.batchSize
+ }
+ 
++func (p *streamTransport) perAttemptAckTimeout(fragmentCount int) time.Duration {
++	if fragmentCount <= 0 {
++		return p.effectiveAckTimeout()
++	}
++
++	batchSize := p.effectiveBatchSize()
++	if batchSize <= 0 {
++		batchSize = 1
++	}
++	ticks := (fragmentCount + batchSize - 1) / batchSize
++	estimated := time.Duration(ticks) * p.effectiveFrameInterval() * 4
++	if estimated < p.effectiveAckTimeout() {
++		return p.effectiveAckTimeout()
++	}
++	const maxAckTimeout = 45 * time.Second
++	if estimated > maxAckTimeout {
++		return maxAckTimeout
++	}
++	return estimated
++}
++
+ func (p *streamTransport) writerLoop() {
+ 	defer close(p.writerDone)
+ 
+@@ -429,7 +471,7 @@ func (p *streamTransport) handleSample(sample []byte) {
+ 			p.peerReady.Store(true)
+ 		case frameTypeAck:
+ 			p.peerReady.Store(true)
+-			p.resolveAck(frame.seq, frame.crc)
++			p.resolveAck(frame.seq, frame.crc, frame.fragIdx)
+ 		case frameTypeData:
+ 			p.peerReady.Store(true)
+ 			p.handleInboundFrame(frame)
+@@ -448,23 +490,25 @@ func (p *streamTransport) handleInboundFrame(frame transportFrame) {
+ 	})
+ 	switch result {
+ 	case common.ResultDuplicate:
+-		p.sendAck(frame.seq, frame.crc)
++		p.sendAck(frame.seq, frame.crc, frame.fragIdx)
+ 	case common.ResultDelivered:
+ 		if p.onData != nil {
+ 			p.onData(data)
+ 		}
+-		p.sendAck(frame.seq, frame.crc)
+-	case common.ResultPartial, common.ResultIgnore:
+-		// fragment stored or discarded; no peer response needed yet.
++		p.sendAck(frame.seq, frame.crc, frame.fragIdx)
++	case common.ResultPartial:
++		p.sendAck(frame.seq, frame.crc, frame.fragIdx)
++	case common.ResultIgnore:
++		// Malformed or out-of-range; no ack.
+ 	}
+ }
+ 
+-func (p *streamTransport) sendAck(seq, crc uint32) {
+-	_ = p.enqueueFrame(encodeAckFrame(seq, crc), true)
++func (p *streamTransport) sendAck(seq, crc uint32, fragIdx uint16) {
++	_ = p.enqueueFrame(encodeAckFrame(seq, crc, fragIdx), true)
+ }
+ 
+-func (p *streamTransport) resolveAck(seq, crc uint32) {
+-	p.acks.Resolve(seq, crc)
++func (p *streamTransport) resolveAck(seq, crc uint32, fragIdx uint16) {
++	p.acks.Mark(seq, crc, int(fragIdx))
+ }
+ 
+ func encodeDataFrame(seq, crc uint32, totalLen, fragIdx, fragTotal int, payload []byte) []byte {
+@@ -481,13 +525,14 @@ func encodeDataFrame(seq, crc uint32, totalLen, fragIdx, fragTotal int, payload
+ 	return out
+ }
+ 
+-func encodeAckFrame(seq, crc uint32) []byte {
+-	out := make([]byte, 14)
++func encodeAckFrame(seq, crc uint32, fragIdx uint16) []byte {
++	out := make([]byte, 16)
+ 	binary.BigEndian.PutUint32(out[0:4], protocolMagic)
+ 	out[4] = protocolVersion
+ 	out[5] = frameTypeAck
+ 	binary.BigEndian.PutUint32(out[6:10], seq)
+ 	binary.BigEndian.PutUint32(out[10:14], crc)
++	binary.BigEndian.PutUint16(out[14:16], fragIdx)
+ 	return out
+ }
+ 
+@@ -520,6 +565,9 @@ func decodeTransportFrame(data []byte) (transportFrame, error) {
+ 		}
+ 		frame.seq = binary.BigEndian.Uint32(data[6:10])
+ 		frame.crc = binary.BigEndian.Uint32(data[10:14])
++		if len(data) >= 16 {
++			frame.fragIdx = binary.BigEndian.Uint16(data[14:16])
++		}
+ 		return frame, nil
+ 	case frameTypeData:
+ 		if len(data) < 22 {
+@@ -536,4 +584,3 @@ func decodeTransportFrame(data []byte) (transportFrame, error) {
+ 		return transportFrame{}, ErrUnexpectedFrameType
+ 	}
+ }
+-
+diff --git a/internal/transport/seichannel/transport_unit_test.go b/internal/transport/seichannel/transport_unit_test.go
+index f9d90ba..6a5959e 100644
+--- a/internal/transport/seichannel/transport_unit_test.go
++++ b/internal/transport/seichannel/transport_unit_test.go
+@@ -10,7 +10,6 @@ import (
+ 	"github.com/openlibrecommunity/olcrtc/internal/engine"
+ 	enginebuiltin "github.com/openlibrecommunity/olcrtc/internal/engine/builtin"
+ 	"github.com/openlibrecommunity/olcrtc/internal/transport"
+-	"github.com/openlibrecommunity/olcrtc/internal/transport/common"
+ 	"github.com/pion/webrtc/v4"
+ )
+ 
+@@ -76,10 +75,10 @@ func (s *fakeEngineSession) SetEndedCallback(cb func(string))  { s.stream.SetEnd
+ func (s *fakeEngineSession) WatchConnection(ctx context.Context) {
+ 	s.stream.WatchConnection(ctx)
+ }
+-func (s *fakeEngineSession) CanSend() bool                            { return s.stream.CanSend() }
+-func (s *fakeEngineSession) GetSendQueue() chan []byte                { return nil }
+-func (s *fakeEngineSession) GetBufferedAmount() uint64                { return 0 }
+-func (s *fakeEngineSession) AddVideoTrack(t webrtc.TrackLocal) error  { return s.stream.AddTrack(t) }
++func (s *fakeEngineSession) CanSend() bool                           { return s.stream.CanSend() }
++func (s *fakeEngineSession) GetSendQueue() chan []byte               { return nil }
++func (s *fakeEngineSession) GetBufferedAmount() uint64               { return 0 }
++func (s *fakeEngineSession) AddVideoTrack(t webrtc.TrackLocal) error { return s.stream.AddTrack(t) }
+ func (s *fakeEngineSession) SetVideoTrackHandler(cb func(*webrtc.TrackRemote, *webrtc.RTPReceiver)) {
+ 	s.stream.SetTrackHandler(cb)
+ }
+@@ -169,7 +168,7 @@ func TestSendAckAndClosePaths(t *testing.T) {
+ 		outboundAck: make(chan []byte, 8),
+ 		closeCh:     make(chan struct{}),
+ 		writerDone:  make(chan struct{}),
+-		acks:        common.NewAckRegistry(),
++		acks:        newFragAckTracker(),
+ 	}
+ 
+ 	done := make(chan error, 1)
+@@ -182,7 +181,7 @@ func TestSendAckAndClosePaths(t *testing.T) {
+ 		if err != nil {
+ 			t.Fatalf("decodeTransportFrame() error = %v", err)
+ 		}
+-		tr.resolveAck(decoded.seq, crc32.ChecksumIEEE(payload))
++		tr.resolveAck(decoded.seq, crc32.ChecksumIEEE(payload), decoded.fragIdx)
+ 	case <-time.After(time.Second):
+ 		t.Fatal("Send() did not enqueue frame")
+ 	}
+@@ -197,3 +196,17 @@ func TestSendAckAndClosePaths(t *testing.T) {
+ 		t.Fatalf("Send(closed) error = %v, want %v", err, ErrTransportClosed)
+ 	}
+ }
++
++func TestPerAttemptAckTimeoutScalesWithWriterRate(t *testing.T) {
++	tr := &streamTransport{
++		frameInterval: 50 * time.Millisecond,
++		batchSize:     4,
++		ackTimeout:    1500 * time.Millisecond,
++	}
++	if got := tr.perAttemptAckTimeout(1); got != 1500*time.Millisecond {
++		t.Fatalf("perAttemptAckTimeout(1) = %v, want configured floor", got)
++	}
++	if got := tr.perAttemptAckTimeout(80); got != 4*time.Second {
++		t.Fatalf("perAttemptAckTimeout(80) = %v, want 4s", got)
++	}
++}
 diff --git a/internal/transport/videochannel/ffmpeg.go b/internal/transport/videochannel/ffmpeg.go
 index e2b6512..c68684d 100644
 --- a/internal/transport/videochannel/ffmpeg.go
@@ -2283,512 +2787,3 @@ index bb27231..ce48791 100644
  		t.Fatalf("readRawH264 frame = %q", got)
  	}
  
-diff --git a/internal/transport/vp8channel/kcp.go b/internal/transport/vp8channel/kcp.go
-index 1fa6592..d2c21c9 100644
---- a/internal/transport/vp8channel/kcp.go
-+++ b/internal/transport/vp8channel/kcp.go
-@@ -60,8 +60,8 @@ type kcpRuntime struct {
- 	closeOnce sync.Once
- }
- 
--func startKCP(out chan<- []byte, onData func([]byte), epochHdr [epochHdrLen]byte) (*kcpRuntime, error) {
--	c := newKCPConn(out, inboundQueueSize, epochHdr)
-+func startKCP(out chan<- []byte, onData func([]byte), epochHdrs ...[epochHdrLen]byte) (*kcpRuntime, error) {
-+	c := newKCPConn(out, inboundQueueSize, epochHdrs...)
- 
- 	sess, err := kcp.NewConn3(kcpConvID, fakeUDPAddr(), nil, 0, 0, c)
- 	if err != nil {
-diff --git a/internal/transport/vp8channel/kcpconn.go b/internal/transport/vp8channel/kcpconn.go
-index 11f43b8..7a0240a 100644
---- a/internal/transport/vp8channel/kcpconn.go
-+++ b/internal/transport/vp8channel/kcpconn.go
-@@ -28,28 +28,42 @@ type kcpConn struct {
- 	closed    chan struct{}
- 	closeOnce sync.Once
- 
--	// epochHdr is prepended to every outgoing KCP packet so that the peer
--	// can detect a session restart on our side (see transport.go for the
--	// layout). Stable for the lifetime of this kcpConn.
--	epochHdr [epochHdrLen]byte
-+	// epochHdrs are prepended to outgoing KCP packets. Multiple headers are
-+	// used only during compatibility probing, then narrowed after the peer's
-+	// token is observed.
-+	epochHdrs [][epochHdrLen]byte
- 
- 	mu        sync.Mutex
- 	rDeadline time.Time
- 	wDeadline time.Time
- }
- 
--func newKCPConn(out chan<- []byte, inboundCap int, epochHdr [epochHdrLen]byte) *kcpConn {
-+func newKCPConn(out chan<- []byte, inboundCap int, epochHdrs ...[epochHdrLen]byte) *kcpConn {
- 	if inboundCap <= 0 {
- 		inboundCap = 1024
- 	}
-+	if len(epochHdrs) == 0 {
-+		epochHdrs = [][epochHdrLen]byte{{}}
-+	}
-+	headers := append([][epochHdrLen]byte(nil), epochHdrs...)
- 	return &kcpConn{
--		out:      out,
--		in:       make(chan []byte, inboundCap),
--		closed:   make(chan struct{}),
--		epochHdr: epochHdr,
-+		out:       out,
-+		in:        make(chan []byte, inboundCap),
-+		closed:    make(chan struct{}),
-+		epochHdrs: headers,
- 	}
- }
- 
-+func (c *kcpConn) SetEpochHeaders(epochHdrs ...[epochHdrLen]byte) {
-+	if len(epochHdrs) == 0 {
-+		return
-+	}
-+	headers := append([][epochHdrLen]byte(nil), epochHdrs...)
-+	c.mu.Lock()
-+	c.epochHdrs = headers
-+	c.mu.Unlock()
-+}
-+
- // deliver hands an incoming wire payload to the KCP read loop. Drops on
- // overflow are intentional - KCP will detect the loss via SACK and retransmit.
- func (c *kcpConn) deliver(payload []byte) {
-@@ -90,13 +104,13 @@ func (c *kcpConn) ReadFrom(p []byte) (int, net.Addr, error) {
- }
- 
- func (c *kcpConn) WriteTo(p []byte, _ net.Addr) (int, error) {
--	buf := make([]byte, epochHdrLen+len(p))
--	copy(buf, c.epochHdr[:])
--	copy(buf[epochHdrLen:], p)
--
- 	c.mu.Lock()
- 	deadline := c.wDeadline
-+	headers := append([][epochHdrLen]byte(nil), c.epochHdrs...)
- 	c.mu.Unlock()
-+	if len(headers) == 0 {
-+		headers = [][epochHdrLen]byte{{}}
-+	}
- 
- 	var timerC <-chan time.Time
- 	if !deadline.IsZero() {
-@@ -109,14 +123,20 @@ func (c *kcpConn) WriteTo(p []byte, _ net.Addr) (int, error) {
- 		timerC = t.C
- 	}
- 
--	select {
--	case c.out <- buf:
--		return len(p), nil
--	case <-c.closed:
--		return 0, net.ErrClosed
--	case <-timerC:
--		return 0, TimeoutError{}
-+	for _, hdr := range headers {
-+		buf := make([]byte, epochHdrLen+len(p))
-+		copy(buf, hdr[:])
-+		copy(buf[epochHdrLen:], p)
-+
-+		select {
-+		case c.out <- buf:
-+		case <-c.closed:
-+			return 0, net.ErrClosed
-+		case <-timerC:
-+			return 0, TimeoutError{}
-+		}
- 	}
-+	return len(p), nil
- }
- 
- func (c *kcpConn) Close() error {
-diff --git a/internal/transport/vp8channel/kcpconn_test.go b/internal/transport/vp8channel/kcpconn_test.go
-index 78fcf3b..5278906 100644
---- a/internal/transport/vp8channel/kcpconn_test.go
-+++ b/internal/transport/vp8channel/kcpconn_test.go
-@@ -2,6 +2,7 @@ package vp8channel
- 
- import (
- 	"bytes"
-+	"encoding/binary"
- 	"errors"
- 	"net"
- 	"testing"
-@@ -73,3 +74,33 @@ func TestKCPConnTimeouts(t *testing.T) {
- 		t.Fatal("WriteTo() unexpectedly succeeded")
- 	}
- }
-+
-+func TestKCPConnWritesCompatibilityHeadersUntilPinned(t *testing.T) {
-+	out := make(chan []byte, 4)
-+	first := testEpochHdr(1)
-+	second := testEpochHdr(2)
-+	conn := newKCPConn(out, 1, first, second)
-+
-+	n, err := conn.WriteTo([]byte("payload"), nil)
-+	if err != nil || n != len("payload") {
-+		t.Fatalf("WriteTo() = (%d, %v), want payload length", n, err)
-+	}
-+	if got := binaryToken(<-out); got != binaryToken(first[:]) {
-+		t.Fatalf("first token = 0x%08x, want 0x%08x", got, binaryToken(first[:]))
-+	}
-+	if got := binaryToken(<-out); got != binaryToken(second[:]) {
-+		t.Fatalf("second token = 0x%08x, want 0x%08x", got, binaryToken(second[:]))
-+	}
-+
-+	conn.SetEpochHeaders(second)
-+	if _, err := conn.WriteTo([]byte("again"), nil); err != nil {
-+		t.Fatalf("WriteTo pinned error = %v", err)
-+	}
-+	if got := binaryToken(<-out); got != binaryToken(second[:]) {
-+		t.Fatalf("pinned token = 0x%08x, want 0x%08x", got, binaryToken(second[:]))
-+	}
-+}
-+
-+func binaryToken(frame []byte) uint32 {
-+	return binary.BigEndian.Uint32(frame[tokenOff:epochOff])
-+}
-diff --git a/internal/transport/vp8channel/transport.go b/internal/transport/vp8channel/transport.go
-index 80852c9..ee96bc3 100644
---- a/internal/transport/vp8channel/transport.go
-+++ b/internal/transport/vp8channel/transport.go
-@@ -13,6 +13,7 @@ import (
- 	"fmt"
- 	"hash/crc32"
- 	"hash/fnv"
-+	"strings"
- 	"sync"
- 	"sync/atomic"
- 	"time"
-@@ -99,10 +100,12 @@ type streamTransport struct {
- 	// localEpoch is bumped on every KCP session restart and stamped into
- 	// every outgoing VP8 frame. peerEpoch tracks the last epoch we observed
- 	// from the remote so we can detect their restart and reset locally.
--	bindingToken uint32
--	localEpoch   uint32
--	peerEpoch    atomic.Uint32
--	hadPeer      atomic.Bool
-+	bindingToken       uint32
-+	bindingTokens      []uint32
-+	pinnedBindingToken atomic.Uint32
-+	localEpoch         uint32
-+	peerEpoch          atomic.Uint32
-+	hadPeer            atomic.Bool
- 
- 	kcp         *kcpRuntime
- 	kcpMu       sync.RWMutex
-@@ -162,6 +165,7 @@ func New(ctx context.Context, cfg transport.Config) (transport.Transport, error)
- 		batchSize = 1
- 	}
- 
-+	tokens := bindingTokens(cfg)
- 	tr := &streamTransport{
- 		stream:        stream,
- 		track:         track,
-@@ -171,7 +175,8 @@ func New(ctx context.Context, cfg transport.Config) (transport.Transport, error)
- 		writerDone:    make(chan struct{}),
- 		frameInterval: time.Second / time.Duration(fps),
- 		batchSize:     batchSize,
--		bindingToken:  bindingToken(cfg.RoomURL),
-+		bindingToken:  tokens[0],
-+		bindingTokens: tokens,
- 		localEpoch:    randomEpoch(),
- 	}
- 
-@@ -183,6 +188,68 @@ func New(ctx context.Context, cfg transport.Config) (transport.Transport, error)
- 	return tr, nil
- }
- 
-+func bindingID(cfg transport.Config) string {
-+	if cfg.ChannelID != "" {
-+		return cfg.ChannelID
-+	}
-+	if cfg.DeviceID != "" {
-+		return cfg.DeviceID
-+	}
-+	return cfg.RoomURL
-+}
-+
-+func bindingTokens(cfg transport.Config) []uint32 {
-+	tokens := make([]uint32, 0, 6)
-+	tokens = appendBindingToken(tokens, bindingID(cfg))
-+	tokens = appendRoomBindingTokens(tokens, cfg.Carrier, cfg.RoomURL)
-+	tokens = appendBindingToken(tokens, cfg.ChannelID)
-+	tokens = appendBindingToken(tokens, cfg.DeviceID)
-+	if len(tokens) == 0 {
-+		return []uint32{bindingToken("")}
-+	}
-+	return tokens
-+}
-+
-+func appendRoomBindingTokens(tokens []uint32, carrier, roomURL string) []uint32 {
-+	roomURL = strings.TrimSpace(roomURL)
-+	tokens = appendBindingToken(tokens, roomURL)
-+	if strings.EqualFold(strings.TrimSpace(carrier), "telemost") {
-+		tokens = appendBindingToken(tokens, canonicalTelemostRoomURL(roomURL))
-+		tokens = appendBindingToken(tokens, bareTelemostRoomID(roomURL))
-+	}
-+	return tokens
-+}
-+
-+func canonicalTelemostRoomURL(roomURL string) string {
-+	roomID := bareTelemostRoomID(roomURL)
-+	if roomID == "" || strings.HasPrefix(roomID, "http://") || strings.HasPrefix(roomID, "https://") {
-+		return ""
-+	}
-+	return "https://telemost.yandex.ru/j/" + roomID
-+}
-+
-+func bareTelemostRoomID(roomURL string) string {
-+	roomURL = strings.TrimRight(strings.TrimSpace(roomURL), "/")
-+	const prefix = "https://telemost.yandex.ru/j/"
-+	if strings.HasPrefix(roomURL, prefix) {
-+		return strings.TrimRight(strings.TrimPrefix(roomURL, prefix), "/")
-+	}
-+	return roomURL
-+}
-+
-+func appendBindingToken(tokens []uint32, value string) []uint32 {
-+	if value == "" {
-+		return tokens
-+	}
-+	token := bindingToken(value)
-+	for _, existing := range tokens {
-+		if existing == token {
-+			return tokens
-+		}
-+	}
-+	return append(tokens, token)
-+}
-+
- func (p *streamTransport) Connect(ctx context.Context) error {
- 	connectCtx, cancel := context.WithTimeout(ctx, defaultConnectTimeout)
- 	defer cancel()
-@@ -196,7 +263,7 @@ func (p *streamTransport) Connect(ctx context.Context) error {
- 	// would deadlock: muxconn.Write spins on CanSend (which checks kcp!=nil)
- 	// and KCP was only started lazily on the first incoming peer frame.
- 	p.kcpOnce.Do(func() {
--		rt, err := startKCP(p.outbound, p.onData, p.epochHeader())
-+		rt, err := startKCP(p.outbound, p.onData, p.epochHeaders()...)
- 		if err != nil {
- 			logger.Infof("vp8channel: startKCP failed: %v", err)
- 			return
-@@ -215,17 +282,35 @@ func (p *streamTransport) Connect(ctx context.Context) error {
- 	return nil
- }
- 
--// epochHeader returns the 5-byte VP8-frame header used to tag every KCP
-+// epochHeader returns the VP8-frame header used to tag every KCP
- // packet sent in the current local session.
- func (p *streamTransport) epochHeader() [epochHdrLen]byte {
-+	return p.epochHeaderFor(p.bindingToken)
-+}
-+
-+func (p *streamTransport) epochHeaderFor(token uint32) [epochHdrLen]byte {
- 	var hdr [epochHdrLen]byte
- 	copy(hdr[:], vp8Keepalive)
--	binary.BigEndian.PutUint32(hdr[tokenOff:epochOff], p.bindingToken)
-+	binary.BigEndian.PutUint32(hdr[tokenOff:epochOff], token)
- 	binary.BigEndian.PutUint32(hdr[epochOff:crcOff], p.localEpoch)
--	binary.BigEndian.PutUint32(hdr[crcOff:epochHdrLen], epochCRC(p.bindingToken, p.localEpoch))
-+	binary.BigEndian.PutUint32(hdr[crcOff:epochHdrLen], epochCRC(token, p.localEpoch))
- 	return hdr
- }
- 
-+func (p *streamTransport) epochHeaders() [][epochHdrLen]byte {
-+	if pinned := p.pinnedBindingToken.Load(); pinned != 0 {
-+		return [][epochHdrLen]byte{p.epochHeaderFor(pinned)}
-+	}
-+	if len(p.bindingTokens) == 0 {
-+		return [][epochHdrLen]byte{p.epochHeader()}
-+	}
-+	headers := make([][epochHdrLen]byte, 0, len(p.bindingTokens))
-+	for _, token := range p.bindingTokens {
-+		headers = append(headers, p.epochHeaderFor(token))
-+	}
-+	return headers
-+}
-+
- func epochCRC(token, epoch uint32) uint32 {
- 	var buf [8]byte
- 	binary.BigEndian.PutUint32(buf[0:4], token)
-@@ -420,7 +505,7 @@ func (p *streamTransport) resetKCP() {
- 	// peer-triggered reset, the peer would see a "new" epoch from us, reset
- 	// itself, send back its (unchanged) epoch which we'd then see as "new"
- 	// again - and the two sides would loop forever tearing down smux.
--	rt, err := startKCP(p.outbound, p.onData, p.epochHeader())
-+	rt, err := startKCP(p.outbound, p.onData, p.epochHeaders()...)
- 	if err != nil {
- 		return
- 	}
-@@ -533,6 +618,35 @@ func (p *streamTransport) handleFirstPeer(peerEpoch uint32) {
- 	logger.Infof("vp8channel: peer first seen epoch=0x%08x", peerEpoch)
- }
- 
-+func (p *streamTransport) acceptsBindingToken(token uint32) bool {
-+	if token == p.bindingToken {
-+		return true
-+	}
-+	for _, accepted := range p.bindingTokens {
-+		if token == accepted {
-+			return true
-+		}
-+	}
-+	return false
-+}
-+
-+func (p *streamTransport) pinBindingToken(token uint32) {
-+	if !p.acceptsBindingToken(token) {
-+		return
-+	}
-+	if !p.pinnedBindingToken.CompareAndSwap(0, token) {
-+		return
-+	}
-+	hdr := p.epochHeaderFor(token)
-+	p.kcpMu.RLock()
-+	rt := p.kcp
-+	p.kcpMu.RUnlock()
-+	if rt != nil {
-+		rt.conn.SetEpochHeaders(hdr)
-+	}
-+	logger.Infof("vp8channel: pinned binding token=0x%08x", token)
-+}
-+
- // handleIncomingFrame parses the epoch header and either delivers the KCP
- // payload to the local session or triggers a reset when the peer's epoch
- // changes (peer process restart).
-@@ -542,7 +656,7 @@ func (p *streamTransport) handleIncomingFrame(frame []byte) {
- 		logger.Debugf("vp8channel: frame header checksum mismatch")
- 		return
- 	}
--	if frameToken != p.bindingToken {
-+	if !p.acceptsBindingToken(frameToken) {
- 		logger.Debugf("vp8channel: frame token mismatch got=0x%08x want=0x%08x (foreign client or noise)",
- 			frameToken, p.bindingToken)
- 		return
-@@ -557,6 +671,8 @@ func (p *streamTransport) handleIncomingFrame(frame []byte) {
- 		return
- 	}
- 
-+	p.pinBindingToken(frameToken)
-+
- 	if !p.hadPeer.Swap(true) {
- 		p.handleFirstPeer(peerEpoch)
- 	} else if prev := p.peerEpoch.Load(); prev != peerEpoch {
-diff --git a/internal/transport/vp8channel/transport_unit_test.go b/internal/transport/vp8channel/transport_unit_test.go
-index 6cd97a5..72d2243 100644
---- a/internal/transport/vp8channel/transport_unit_test.go
-+++ b/internal/transport/vp8channel/transport_unit_test.go
-@@ -90,10 +90,10 @@ func (s *fakeEngineSession) SetEndedCallback(cb func(string))  { s.stream.SetEnd
- func (s *fakeEngineSession) WatchConnection(ctx context.Context) {
- 	s.stream.WatchConnection(ctx)
- }
--func (s *fakeEngineSession) CanSend() bool                            { return s.stream.CanSend() }
--func (s *fakeEngineSession) GetSendQueue() chan []byte                { return nil }
--func (s *fakeEngineSession) GetBufferedAmount() uint64                { return 0 }
--func (s *fakeEngineSession) AddVideoTrack(t webrtc.TrackLocal) error  { return s.stream.AddTrack(t) }
-+func (s *fakeEngineSession) CanSend() bool                           { return s.stream.CanSend() }
-+func (s *fakeEngineSession) GetSendQueue() chan []byte               { return nil }
-+func (s *fakeEngineSession) GetBufferedAmount() uint64               { return 0 }
-+func (s *fakeEngineSession) AddVideoTrack(t webrtc.TrackLocal) error { return s.stream.AddTrack(t) }
- func (s *fakeEngineSession) SetVideoTrackHandler(cb func(*webrtc.TrackRemote, *webrtc.RTPReceiver)) {
- 	s.stream.SetTrackHandler(cb)
- }
-@@ -230,6 +230,99 @@ func TestEpochHeaderTokenAndOutboundCapacity(t *testing.T) {
- 	}
- }
- 
-+func TestBindingTokensPreferClientIDAndKeepRoomURLFallback(t *testing.T) {
-+	tokens := bindingTokens(transport.Config{
-+		Carrier:   "telemost",
-+		RoomURL:   "https://telemost.yandex.ru/j/79061977050409",
-+		ChannelID: "default",
-+		DeviceID:  "ignored-when-channel-is-set",
-+	})
-+	if got, want := tokens[0], bindingToken("default"); got != want {
-+		t.Fatalf("primary token = 0x%08x, want channel token 0x%08x", got, want)
-+	}
-+	if len(tokens) < 2 || tokens[1] != bindingToken("https://telemost.yandex.ru/j/79061977050409") {
-+		t.Fatalf("tokens = %#v, want room URL fallback", tokens)
-+	}
-+	if !hasToken(tokens, bindingToken("79061977050409")) {
-+		t.Fatalf("tokens = %#v, want bare Telemost room id fallback", tokens)
-+	}
-+
-+	tokens = bindingTokens(transport.Config{
-+		RoomURL:  "room",
-+		DeviceID: "android-client",
-+	})
-+	if got, want := tokens[0], bindingToken("android-client"); got != want {
-+		t.Fatalf("android primary token = 0x%08x, want device token 0x%08x", got, want)
-+	}
-+}
-+
-+func TestBindingTokensAcceptTelemostBareAndFullRoomForms(t *testing.T) {
-+	full := "https://telemost.yandex.ru/j/79061977050409"
-+	bare := "79061977050409"
-+
-+	fromBare := bindingTokens(transport.Config{Carrier: "telemost", RoomURL: bare})
-+	if !hasToken(fromBare, bindingToken(full)) {
-+		t.Fatalf("tokens from bare room = %#v, want full URL fallback", fromBare)
-+	}
-+	if !hasToken(fromBare, bindingToken(bare)) {
-+		t.Fatalf("tokens from bare room = %#v, want bare room token", fromBare)
-+	}
-+
-+	fromFull := bindingTokens(transport.Config{Carrier: "telemost", RoomURL: full})
-+	if !hasToken(fromFull, bindingToken(bare)) {
-+		t.Fatalf("tokens from full URL = %#v, want bare room fallback", fromFull)
-+	}
-+	if !hasToken(fromFull, bindingToken(full)) {
-+		t.Fatalf("tokens from full URL = %#v, want full URL token", fromFull)
-+	}
-+}
-+
-+func hasToken(tokens []uint32, want uint32) bool {
-+	for _, token := range tokens {
-+		if token == want {
-+			return true
-+		}
-+	}
-+	return false
-+}
-+
-+func TestIncomingRoomURLFallbackPinsOutgoingToken(t *testing.T) {
-+	primary := bindingToken("default")
-+	fallback := bindingToken("room")
-+	tr := &streamTransport{
-+		outbound:      make(chan []byte, 10),
-+		closeCh:       make(chan struct{}),
-+		writerDone:    make(chan struct{}),
-+		bindingToken:  primary,
-+		bindingTokens: []uint32{primary, fallback},
-+		localEpoch:    0x01020304,
-+	}
-+
-+	rt, err := startKCP(tr.outbound, nil, tr.epochHeaders()...)
-+	if err != nil {
-+		t.Fatalf("startKCP: %v", err)
-+	}
-+	defer rt.close()
-+	tr.kcpMu.Lock()
-+	tr.kcp = rt
-+	tr.kcpMu.Unlock()
-+
-+	frame := make([]byte, epochHdrLen)
-+	copy(frame, vp8Keepalive)
-+	binary.BigEndian.PutUint32(frame[tokenOff:epochOff], fallback)
-+	binary.BigEndian.PutUint32(frame[epochOff:crcOff], 0x05060708)
-+	binary.BigEndian.PutUint32(frame[crcOff:epochHdrLen], epochCRC(fallback, 0x05060708))
-+	tr.handleIncomingFrame(frame)
-+
-+	if got := tr.pinnedBindingToken.Load(); got != fallback {
-+		t.Fatalf("pinned token = 0x%08x, want fallback 0x%08x", got, fallback)
-+	}
-+	if headers := tr.epochHeaders(); len(headers) != 1 ||
-+		binary.BigEndian.Uint32(headers[0][tokenOff:epochOff]) != fallback {
-+		t.Fatalf("headers after pin = %#v, want only fallback", headers)
-+	}
-+}
-+
- func TestVP8FrameStateAssemblesAndRejectsCorruptFrames(t *testing.T) {
- 	frame := append(append([]byte(nil), vp8Keepalive...), bytes.Repeat([]byte{0x01}, epochHdrLen-len(vp8Keepalive))...)
- 	var state vp8FrameState

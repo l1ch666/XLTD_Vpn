@@ -1,5 +1,18 @@
 # Changelog
 
+## 1.9.2-universal-carrier
+
+- Rebased the local MTS Link olcRTC fork patch on the latest `refactor/universal-carrier` core.
+- Reworked `seichannel` ACK handling to acknowledge individual fragments, reducing whole-message retries and control-stream liveness drops on lossy visual media.
+- Added MTS Link SEI defaults for bursty rooms: 30 FPS, batch 8, 700-byte fragments, and 10s ACK timeout.
+- Added Android `videochannel` runtime support: the combo AAR can bundle Android ffmpeg assets and the VPN service passes the extracted ffmpeg path into the native core.
+
+## Windows 0.5.2-beta
+
+- Bundled `wintun.dll` with the Windows package so full tunnel mode can create the Wintun adapter next to `tun2socks.exe`.
+- Added clearer full-tunnel preflight errors when Wintun is missing or `tun2socks` exits before adapter creation.
+- Added MTS Link liveness and traffic-shaping defaults for `seichannel` profiles, while keeping URI parameters overrideable.
+
 ## 1.9.1-universal-carrier
 
 - Fixed MTS Link videochannel negotiation so the incoming video receiver stays separate from the outgoing H.264 QR track.

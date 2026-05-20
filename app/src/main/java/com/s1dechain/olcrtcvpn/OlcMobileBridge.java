@@ -64,6 +64,15 @@ public final class OlcMobileBridge {
         callVoid(new String[]{"SetLink", "setLink"}, new Class<?>[]{String.class}, linkMode);
     }
 
+    public void setFFmpegPath(String path) throws Exception {
+        if (path == null || path.trim().isEmpty()) return;
+        try {
+            callVoid(new String[]{"SetFFmpegPath", "setFFmpegPath"}, new Class<?>[]{String.class}, path.trim());
+        } catch (NoSuchMethodException ignored) {
+            throw new IllegalStateException("combo AAR has no SetFFmpegPath; rebuild app/libs/olcrtccombo.aar");
+        }
+    }
+
     public String getAutoDNSUpstream() throws Exception {
         Method method = findMethod(
                 new String[]{"GetAutoDNSUpstream", "getAutoDNSUpstream"},
@@ -153,10 +162,6 @@ public final class OlcMobileBridge {
         if (!OlcUriParser.isSupportedTransport(config.transport)) {
             throw new IllegalArgumentException("unsupported transport in Android build: " + config.transport);
         }
-        if (OlcUriParser.TRANSPORT_VIDEO.equals(config.transport)) {
-            throw new IllegalArgumentException("videochannel requires an ffmpeg-backed native Android core; this APK supports datachannel, vp8channel and seichannel");
-        }
-
         String transport = config.transport;
         boolean transportApplied = setTransportIfAvailable(transport);
         applyTransportOptions(config);
@@ -185,11 +190,13 @@ public final class OlcMobileBridge {
             return;
         }
         if (OlcUriParser.TRANSPORT_SEI.equals(transport)) {
-            int fps = config.intParam("fps", config.intParam("sei-fps", 60));
-            int batch = config.intParam("batch", config.intParam("sei-batch", 64));
-            int frag = config.intParam("frag", config.intParam("sei-frag", 900));
-            int ackMs = config.intParam("ack-ms", config.intParam("sei-ack-ms", 2000));
+            boolean isMtsLink = "mtslink".equalsIgnoreCase(config.carrier);
+            int fps = config.intParam("fps", config.intParam("sei-fps", isMtsLink ? 30 : 60));
+            int batch = config.intParam("batch", config.intParam("sei-batch", isMtsLink ? 8 : 64));
+            int frag = config.intParam("frag", config.intParam("sei-frag", isMtsLink ? 700 : 900));
+            int ackMs = config.intParam("ack-ms", config.intParam("sei-ack-ms", isMtsLink ? 10000 : 2000));
             setSEIOptionsIfAvailable(fps, batch, frag, ackMs);
+            applyCarrierRuntimeOptions(config);
             return;
         }
         if (OlcUriParser.TRANSPORT_VIDEO.equals(transport)) {
@@ -205,7 +212,10 @@ public final class OlcMobileBridge {
             int tileModule = config.intParam("video-tile-module", 4);
             int tileRS = config.intParam("video-tile-rs", 20);
             setVideoOptionsIfAvailable(codec, width, height, fps, bitrate, hw, qrRecovery, qrSize, tileModule, tileRS);
+            applyCarrierRuntimeOptions(config);
+            return;
         }
+        applyCarrierRuntimeOptions(config);
     }
 
     private boolean setTransportIfAvailable(String transport) throws Exception {
@@ -280,6 +290,85 @@ public final class OlcMobileBridge {
                 );
             } catch (NoSuchMethodException ignored) {
                 // Universal-carrier combo AAR should expose this. If not, start may still use upstream defaults.
+            }
+        }
+    }
+
+    private void applyCarrierRuntimeOptions(OlcConfig config) throws Exception {
+        if (config == null || !"mtslink".equalsIgnoreCase(config.carrier)) return;
+
+        int intervalMs = durationParam(config, 20000, "liveness-interval", "live-interval");
+        int timeoutMs = durationParam(config, 15000, "liveness-timeout", "live-timeout");
+        int failures = config.intParam("liveness-failures", config.intParam("live-failures", 6));
+        setLivenessOptionsIfAvailable(intervalMs, timeoutMs, failures);
+
+        int maxPayload = config.intParam("traffic-max-payload", config.intParam("traffic-max-payload-size", 1200));
+        int minDelayMs = durationParam(config, 4, "traffic-min-delay");
+        int maxDelayMs = durationParam(config, 18, "traffic-max-delay");
+        setTrafficOptionsIfAvailable(maxPayload, minDelayMs, maxDelayMs);
+    }
+
+    private int durationParam(OlcConfig config, int defaultMs, String... keys) {
+        for (String key : keys) {
+            String raw = config.param(key, "");
+            if (raw == null || raw.trim().isEmpty()) continue;
+            Integer parsed = parseDurationMs(raw.trim());
+            if (parsed != null) return parsed;
+        }
+        return defaultMs;
+    }
+
+    private Integer parseDurationMs(String raw) {
+        String value = raw.toLowerCase();
+        try {
+            if (value.endsWith("ms")) {
+                return Math.max(0, Integer.parseInt(value.substring(0, value.length() - 2).trim()));
+            }
+            if (value.endsWith("s")) {
+                return Math.max(0, Integer.parseInt(value.substring(0, value.length() - 1).trim()) * 1000);
+            }
+            return Math.max(0, Integer.parseInt(value));
+        } catch (NumberFormatException ignored) {
+            return null;
+        }
+    }
+
+    private void setLivenessOptionsIfAvailable(int intervalMs, int timeoutMs, int failures) throws Exception {
+        try {
+            callVoid(
+                    new String[]{"SetLivenessOptions", "setLivenessOptions"},
+                    new Class<?>[]{int.class, int.class, int.class},
+                    intervalMs, timeoutMs, failures
+            );
+        } catch (NoSuchMethodException first) {
+            try {
+                callVoid(
+                        new String[]{"SetLivenessOptions", "setLivenessOptions"},
+                        new Class<?>[]{long.class, long.class, long.class},
+                        (long) intervalMs, (long) timeoutMs, (long) failures
+                );
+            } catch (NoSuchMethodException ignored) {
+                // Older AARs fall back to core defaults.
+            }
+        }
+    }
+
+    private void setTrafficOptionsIfAvailable(int maxPayload, int minDelayMs, int maxDelayMs) throws Exception {
+        try {
+            callVoid(
+                    new String[]{"SetTrafficOptions", "setTrafficOptions"},
+                    new Class<?>[]{int.class, int.class, int.class},
+                    maxPayload, minDelayMs, maxDelayMs
+            );
+        } catch (NoSuchMethodException first) {
+            try {
+                callVoid(
+                        new String[]{"SetTrafficOptions", "setTrafficOptions"},
+                        new Class<?>[]{long.class, long.class, long.class},
+                        (long) maxPayload, (long) minDelayMs, (long) maxDelayMs
+                );
+            } catch (NoSuchMethodException ignored) {
+                // Older AARs fall back to core defaults.
             }
         }
     }

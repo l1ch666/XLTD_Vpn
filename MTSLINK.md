@@ -1,8 +1,9 @@
 # MTS Link carrier
 
 This repo carries a local olcRTC fork patch for an experimental `mtslink`
-carrier. It joins a public MTS Link room as a guest and uses olcRTC
-`videochannel` over H.264 media.
+carrier. It joins a public MTS Link room as a guest and uses H.264 media.
+For VPN traffic the recommended transport is `seichannel`, because it carries
+data in H.264 SEI payloads without requiring QR video decoding.
 
 ## Room link
 
@@ -33,16 +34,21 @@ room:
 crypto:
   key: "64_hex_key_here"
 net:
-  transport: videochannel
+  transport: seichannel
   dns: "1.1.1.1:53"
-video:
-  codec: qrcode
-  width: 640
-  height: 360
-  fps: 15
-  bitrate: "1200k"
-  hw: none
-  qr_recovery: low
+sei:
+  fps: 30
+  batch_size: 8
+  fragment_size: 700
+  ack_timeout_ms: 10000
+liveness:
+  interval: 20s
+  timeout: 15s
+  failures: 6
+traffic:
+  max_payload_size: 1200
+  min_delay: 4ms
+  max_delay: 18ms
 ffmpeg: "ffmpeg"
 debug: false
 ```
@@ -58,17 +64,18 @@ Run:
 The matching client profile URI is:
 
 ```text
-olcrtc://mtslink?videochannel<video-w=640&video-h=360&video-fps=15&video-bitrate=1200k&mts-peer-update=1&mts-silent-audio=1&mts-force-video=1>@https%3A%2F%2Fmy.mts-link.ru%2Fj%2F167846474%2F19645959806#64_hex_key_here$MTS%20Link
+olcrtc://mtslink?seichannel<fps=30&batch=8&frag=700&ack-ms=10000&liveness-interval=20s&liveness-timeout=15s&liveness-failures=6&traffic-max-payload=1200&traffic-min-delay=4ms&traffic-max-delay=18ms&mts-peer-update=1&mts-silent-audio=1&mts-force-video=1>@https%3A%2F%2Fmy.mts-link.ru%2Fj%2F167846474%2F19645959806#64_hex_key_here$MTS%20Link
 ```
 
-Windows `0.5.1-beta` bundles `ffmpeg.exe` and can run this profile. Android
-parses and stores the profile, but runtime `videochannel` still needs an
-ffmpeg-backed Android core.
+Windows `0.5.2-beta` bundles `ffmpeg.exe`, `wintun.dll`, and the updated
+local core. Android `1.9.2-universal-carrier` can run media transports when the
+combo AAR is built with the Android ffmpeg asset or the profile supplies
+`android-ffmpeg=<path>`.
 
-`0.5.1-beta` keeps the incoming MTS video receiver separate from the outgoing
-H.264 QR stream and fixes ffmpeg H.264 frame boundaries. This targets the case
-where MTS joined successfully but olcRTC failed with `open control stream:
-timeout` before SOCKS became ready.
+`1.9.2` / `0.5.2-beta` also switch `seichannel` to per-fragment ACKs. This
+targets the case where MTS joined successfully, SOCKS became ready, and then
+the control stream died with `seichannel ack timeout` or missed pongs under
+traffic bursts.
 
 ## MTS Link diagnostics
 

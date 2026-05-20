@@ -7,6 +7,10 @@ OLC_DIR="${EXT}/olcrtc"
 TUN_DIR="${EXT}/tun2socks"
 COMBO_DIR="${EXT}/olcrtccombo"
 OUT_AAR="${PROJECT_ROOT}/app/libs/olcrtccombo.aar"
+ANDROID_FFMPEG_VERSION="${ANDROID_FFMPEG_VERSION:-8.1}"
+ANDROID_FFMPEG_ABIS="${ANDROID_FFMPEG_ABIS:-arm64-v8a}"
+ANDROID_FFMPEG_ASSETS_DIR="${PROJECT_ROOT}/app/src/main/assets/ffmpeg"
+ANDROID_FFMPEG_CACHE_DIR="${EXT}/ffmpeg-android"
 OLC_REF="${OLC_REF:-refactor/universal-carrier}"
 
 mkdir -p "${EXT}" "${PROJECT_ROOT}/app/libs"
@@ -47,7 +51,6 @@ clone_if_missing "https://github.com/xjasonlyu/tun2socks" "${TUN_DIR}"
 apply_olcrtc_patch() {
   local patch
   for patch in \
-    "${PROJECT_ROOT}/patches/olcrtc-vp8-legacy-binding.patch" \
     "${PROJECT_ROOT}/patches/olcrtc-mtslink-carrier.patch"; do
     if [ ! -f "${patch}" ]; then
       continue
@@ -65,6 +68,89 @@ apply_olcrtc_patch() {
 }
 
 apply_olcrtc_patch
+
+android_ffmpeg_arch() {
+  case "$1" in
+    arm64-v8a) echo "arm64" ;;
+    armeabi-v7a) echo "arm" ;;
+    x86_64) echo "x64" ;;
+    x86) echo "x86" ;;
+    *) echo "" ;;
+  esac
+}
+
+extract_zip() {
+  local zip="$1"
+  local dest="$2"
+  if command -v unzip >/dev/null 2>&1; then
+    unzip -q "$zip" -d "$dest"
+    return
+  fi
+  if command -v python3 >/dev/null 2>&1; then
+    python3 -m zipfile -e "$zip" "$dest"
+    return
+  fi
+  if command -v python >/dev/null 2>&1; then
+    python -m zipfile -e "$zip" "$dest"
+    return
+  fi
+  echo "[X] Need unzip or python to extract Android ffmpeg archive" >&2
+  exit 1
+}
+
+prepare_android_ffmpeg_assets() {
+  if [ "${ANDROID_FFMPEG:-1}" = "0" ]; then
+    echo "[*] ANDROID_FFMPEG=0: skipping bundled Android ffmpeg asset"
+    return
+  fi
+
+  mkdir -p "$ANDROID_FFMPEG_CACHE_DIR" "$ANDROID_FFMPEG_ASSETS_DIR"
+  IFS=',' read -ra ABI_LIST <<< "$ANDROID_FFMPEG_ABIS"
+  for abi in "${ABI_LIST[@]}"; do
+    abi="$(echo "$abi" | xargs)"
+    [ -n "$abi" ] || continue
+
+    arch="$(android_ffmpeg_arch "$abi")"
+    if [ -z "$arch" ]; then
+      echo "[X] Unsupported Android ABI for ffmpeg asset: $abi" >&2
+      exit 1
+    fi
+
+    target_dir="${ANDROID_FFMPEG_ASSETS_DIR}/${abi}"
+    target="${target_dir}/ffmpeg"
+    mkdir -p "$target_dir"
+
+    if [ -n "${ANDROID_FFMPEG_DIR:-}" ] && [ -f "${ANDROID_FFMPEG_DIR}/${abi}/ffmpeg" ]; then
+      cp "${ANDROID_FFMPEG_DIR}/${abi}/ffmpeg" "$target"
+      chmod 0755 "$target"
+      echo "[*] Bundled Android ffmpeg from ANDROID_FFMPEG_DIR for $abi"
+      continue
+    fi
+
+    zip="${ANDROID_FFMPEG_CACHE_DIR}/ffmpeg-android-${arch}-${ANDROID_FFMPEG_VERSION}.zip"
+    url="https://github.com/Tyrrrz/FFmpegBin/releases/download/${ANDROID_FFMPEG_VERSION}/ffmpeg-android-${arch}.zip"
+    if [ ! -f "$zip" ]; then
+      echo "[*] Downloading Android ffmpeg ${ANDROID_FFMPEG_VERSION} for $abi..."
+      curl -L --fail --retry 3 -o "$zip" "$url"
+    fi
+
+    extract_dir="${ANDROID_FFMPEG_CACHE_DIR}/extract-${abi}"
+    rm -rf "$extract_dir"
+    mkdir -p "$extract_dir"
+    extract_zip "$zip" "$extract_dir"
+
+    found="$(find "$extract_dir" -type f \( -name ffmpeg -o -name ffmpeg.exe \) | head -n 1)"
+    if [ -z "$found" ]; then
+      echo "[X] Android ffmpeg archive for $abi did not contain ffmpeg" >&2
+      exit 1
+    fi
+    cp "$found" "$target"
+    chmod 0755 "$target"
+    echo "[*] Bundled Android ffmpeg asset: assets/ffmpeg/${abi}/ffmpeg"
+  done
+}
+
+prepare_android_ffmpeg_assets
 
 mkdir -p "${COMBO_DIR}"
 cat > "${COMBO_DIR}/go.mod" <<'EOGO'
@@ -112,6 +198,7 @@ import (
 	"net"
 	"net/http"
 	"net/url"
+	"os"
 	"strings"
 	"sync"
 	"syscall"
@@ -119,6 +206,7 @@ import (
 
 	"github.com/openlibrecommunity/olcrtc/internal/app/session"
 	"github.com/openlibrecommunity/olcrtc/internal/client"
+	"github.com/openlibrecommunity/olcrtc/internal/control"
 	"github.com/openlibrecommunity/olcrtc/internal/logger"
 	"github.com/openlibrecommunity/olcrtc/internal/protect"
 	"github.com/openlibrecommunity/olcrtc/internal/transport"
@@ -207,6 +295,14 @@ type mobileConfig struct {
 	videoCodec      string
 	videoTileModule int
 	videoTileRS     int
+
+	livenessIntervalMS int
+	livenessTimeoutMS  int
+	livenessFailures   int
+
+	trafficMaxPayload int
+	trafficMinDelayMS int
+	trafficMaxDelayMS int
 }
 
 var (
@@ -681,6 +777,37 @@ func SetVideoOptions(codec string, width, height, fps int, bitrate string, hw st
 	defaults.videoTileRS = clampNonNegative(tileRS, 200)
 }
 
+func SetFFmpegPath(path string) error {
+	path = strings.TrimSpace(path)
+	if path == "" {
+		return errors.New("ffmpeg path is empty")
+	}
+	if _, err := os.Stat(path); err != nil {
+		return fmt.Errorf("ffmpeg path is not accessible: %w", err)
+	}
+	videochannel.FFmpegPath = path
+	_ = os.Setenv("FFMPEG_BIN", path)
+	return nil
+}
+
+func SetLivenessOptions(intervalMS, timeoutMS, failures int) {
+	runtimeMu.Lock()
+	defer runtimeMu.Unlock()
+	ensureDefaultConfigLocked()
+	defaults.livenessIntervalMS = clampNonNegative(intervalMS, 300000)
+	defaults.livenessTimeoutMS = clampNonNegative(timeoutMS, 300000)
+	defaults.livenessFailures = clampNonNegative(failures, 100)
+}
+
+func SetTrafficOptions(maxPayload, minDelayMS, maxDelayMS int) {
+	runtimeMu.Lock()
+	defer runtimeMu.Unlock()
+	ensureDefaultConfigLocked()
+	defaults.trafficMaxPayload = clampNonNegative(maxPayload, 65535)
+	defaults.trafficMinDelayMS = clampNonNegative(minDelayMS, 60000)
+	defaults.trafficMaxDelayMS = clampNonNegative(maxDelayMS, 60000)
+}
+
 func SetDebug(enabled bool) {
 	logger.SetVerbose(enabled)
 	if enabled {
@@ -732,6 +859,24 @@ func mobileClientConfig(
 		Engine:           cfg.engine,
 		URL:              cfg.url,
 		Token:            cfg.token,
+		Liveness:         mobileLivenessConfig(cfg),
+		Traffic:          mobileTrafficConfig(cfg),
+	}
+}
+
+func mobileLivenessConfig(cfg mobileConfig) control.Config {
+	return control.Config{
+		Interval: time.Duration(cfg.livenessIntervalMS) * time.Millisecond,
+		Timeout:  time.Duration(cfg.livenessTimeoutMS) * time.Millisecond,
+		Failures: cfg.livenessFailures,
+	}
+}
+
+func mobileTrafficConfig(cfg mobileConfig) transport.TrafficConfig {
+	return transport.TrafficConfig{
+		MaxPayloadSize: cfg.trafficMaxPayload,
+		MinDelay:       time.Duration(cfg.trafficMinDelayMS) * time.Millisecond,
+		MaxDelay:       time.Duration(cfg.trafficMaxDelayMS) * time.Millisecond,
 	}
 }
 
@@ -778,6 +923,7 @@ func startWithConfig(carrierName, transportName, roomID, clientID, keyHex string
 	} else {
 		cfg.transport = normalizeTransport(cfg.transport)
 	}
+	cfg = applyCarrierRuntimeDefaults(carrierName, cfg)
 	if cancel != nil {
 		return errAlreadyRunning
 	}
@@ -979,6 +1125,30 @@ func defaultMobileConfig() mobileConfig {
 		videoTileModule: 4,
 		videoTileRS:     20,
 	}
+}
+
+func applyCarrierRuntimeDefaults(carrierName string, cfg mobileConfig) mobileConfig {
+	if carrierName == "mtslink" {
+		if cfg.livenessIntervalMS <= 0 {
+			cfg.livenessIntervalMS = 20000
+		}
+		if cfg.livenessTimeoutMS <= 0 {
+			cfg.livenessTimeoutMS = 15000
+		}
+		if cfg.livenessFailures <= 0 {
+			cfg.livenessFailures = 6
+		}
+		if cfg.trafficMaxPayload <= 0 {
+			cfg.trafficMaxPayload = 1200
+		}
+		if cfg.trafficMinDelayMS <= 0 {
+			cfg.trafficMinDelayMS = 4
+		}
+		if cfg.trafficMaxDelayMS <= 0 {
+			cfg.trafficMaxDelayMS = 18
+		}
+	}
+	return cfg
 }
 
 func normalizeLink(value string) string {

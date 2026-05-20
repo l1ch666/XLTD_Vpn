@@ -182,6 +182,11 @@ public final class OlcVpnService extends VpnService {
             sendStatus(dnsMsg);
 
             sendStatus("Подключаю olcRTC " + config.transport + "...");
+            if (isVideo(config)) {
+                String ffmpegPath = AndroidVideoRuntime.prepare(this, config);
+                olc.setFFmpegPath(ffmpegPath);
+                sendStatus("Android video runtime ready: ffmpeg " + ffmpegPath);
+            }
             olc.startWithConfig(config, SOCKS_PORT, "", "");
             olc.waitReady(isVisualTransport(config) ? VP8_STARTUP_TIMEOUT_MS : STARTUP_TIMEOUT_MS);
             sendStatus("olcRTC подключён. Проверяю локальный SOCKS 127.0.0.1:" + SOCKS_PORT);
@@ -543,19 +548,23 @@ public final class OlcVpnService extends VpnService {
     }
 
     private int seiFps(OlcConfig config) {
-        return config == null ? 60 : config.intParam("fps", config.intParam("sei-fps", 60));
+        boolean isMtsLink = config != null && "mtslink".equalsIgnoreCase(config.carrier);
+        return config == null ? 60 : config.intParam("fps", config.intParam("sei-fps", isMtsLink ? 30 : 60));
     }
 
     private int seiBatch(OlcConfig config) {
-        return config == null ? 64 : config.intParam("batch", config.intParam("sei-batch", 64));
+        boolean isMtsLink = config != null && "mtslink".equalsIgnoreCase(config.carrier);
+        return config == null ? 64 : config.intParam("batch", config.intParam("sei-batch", isMtsLink ? 8 : 64));
     }
 
     private int seiFrag(OlcConfig config) {
-        return config == null ? 900 : config.intParam("frag", config.intParam("sei-frag", 900));
+        boolean isMtsLink = config != null && "mtslink".equalsIgnoreCase(config.carrier);
+        return config == null ? 900 : config.intParam("frag", config.intParam("sei-frag", isMtsLink ? 700 : 900));
     }
 
     private int seiAckMs(OlcConfig config) {
-        return config == null ? 2000 : config.intParam("ack-ms", config.intParam("sei-ack-ms", 2000));
+        boolean isMtsLink = config != null && "mtslink".equalsIgnoreCase(config.carrier);
+        return config == null ? 2000 : config.intParam("ack-ms", config.intParam("sei-ack-ms", isMtsLink ? 10000 : 2000));
     }
 
     private int clampInt(int value, int min, int max) {

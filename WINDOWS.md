@@ -13,9 +13,9 @@ The current Windows beta keeps the conservative local SOCKS/proxy path and adds 
 - Bundled `olcrtc.exe` built from the local `openlibrecommunity/olcrtc` source snapshot.
 - Local SOCKS mode on `127.0.0.1:10808`.
 - Optional Windows user proxy mode while connected. It stores the previous proxy settings and restores them on stop/exit.
-- Experimental full tunnel mode through bundled `tun2socks.exe` and a Wintun-backed adapter. This mode requires launching the app as Administrator.
+- Experimental full tunnel mode through bundled `tun2socks.exe` and `wintun.dll`. This mode requires launching the app as Administrator.
 - Bundled `ffmpeg.exe` for `videochannel` profiles.
-- Experimental `mtslink` carrier profiles over H.264 `videochannel`.
+- Experimental `mtslink` carrier profiles over H.264 media (`seichannel` for VPN traffic, `videochannel` for diagnostics).
 
 The beta does not install a permanent Windows service. Full tunnel route/DNS setup is applied at connect time and rolled back at stop/exit. If a carrier reconnect loops through the tunnel on a specific network, switch back to local SOCKS or user proxy mode for that profile until the next tunnel hardening pass.
 
@@ -28,7 +28,7 @@ powershell -ExecutionPolicy Bypass -File scripts/build_windows.ps1
 Output:
 
 ```text
-dist/windows/XLTD_Vpn-Windows-0.5.1-beta-win-x64.zip
+dist/windows/XLTD_Vpn-Windows-0.5.2-beta-win-x64.zip
 ```
 
 The package contains:
@@ -36,6 +36,7 @@ The package contains:
 - `XLTD_Vpn_Windows.exe`
 - `tools/olcrtc.exe`
 - `tools/tun2socks.exe`
+- `tools/wintun.dll`
 - `tools/ffmpeg.exe`
 - `tools/data/names`
 - `tools/data/surnames`
@@ -50,7 +51,7 @@ powershell -ExecutionPolicy Bypass -File scripts/build_windows.ps1 -SelfContaine
 
 Feature parity changes should move Android and Windows in parallel by intent, but each platform keeps its own patch number:
 
-- Android: `1.9.1`, `2.0.0`, etc.
-- Windows: `0.5.1-beta`, `0.6.0-beta`, etc.
+- Android: `1.9.2`, `2.0.0`, etc.
+- Windows: `0.5.2-beta`, `0.6.0-beta`, etc.
 
 Small platform-only bugfixes update only the platform they touch.

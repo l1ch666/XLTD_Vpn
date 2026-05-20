@@ -3,6 +3,7 @@ build/
 app/build/
 app/libs/*.aar
 app/libs/*-sources.jar
+app/src/main/assets/ffmpeg/*/ffmpeg
 dist/
 .external/
 .tmp/

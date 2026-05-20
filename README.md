@@ -1,4 +1,4 @@
-# olcRTC Android client - 1.9.1 universal-carrier
+# olcRTC Android client - 1.9.2 universal-carrier
 
 This build updates the Android client for the `openlibrecommunity/olcrtc` `refactor/universal-carrier` branch.
 
@@ -12,7 +12,7 @@ The repository now also contains a separate Windows beta client:
 windows/XLTD.Vpn.Windows
 ```
 
-Windows uses its own version line. Current Windows beta: `0.5.1-beta`. Build it with:
+Windows uses its own version line. Current Windows beta: `0.5.2-beta`. Build it with:
 
 ```powershell
 powershell -ExecutionPolicy Bypass -File scripts/build_windows.ps1
@@ -33,8 +33,8 @@ Reality check for Android VPN mode:
 
 - `datachannel` is still the fastest when the carrier supports it.
 - `vp8channel` is the main stable media transport for `telemost` / `wbstream`.
-- `seichannel` is accepted and passed into the new Android core, but it is still more experimental under full-TUN traffic bursts.
-- `videochannel` links parse correctly on Android, but this APK does not bundle an ffmpeg-backed Android video core yet. Windows 0.5.1-beta bundles `ffmpeg.exe` for `videochannel`.
+- `seichannel` is accepted and passed into the new Android core. MTS Link now uses slower defaults for bursty H.264/SEI traffic.
+- `videochannel` can run on Android when the combo AAR is built with the bundled Android ffmpeg asset, or when a profile supplies `android-ffmpeg=<path>`.
 - `mtslink` is a local olcRTC fork carrier that uses `videochannel` over H.264. See `MTSLINK.md`.
 
 ## URI support
@@ -108,6 +108,15 @@ video-tile-module=4
 video-tile-rs=20
 ```
 
+Android videochannel runtime uses a separate ffmpeg-backed native binary. The
+default combo-AAR build downloads an Android ffmpeg asset for `arm64-v8a` and
+stores it under `assets/ffmpeg/<abi>/ffmpeg`. You can override the runtime path
+in a profile with:
+
+```text
+android-ffmpeg=/data/local/tmp/ffmpeg
+```
+
 ### Android-only VPN params
 
 These are not olcRTC core params, they tune the Android full-VPN wrapper:
@@ -124,6 +133,14 @@ Example:
 ```text
 olcrtc://wbstream?vp8channel<vp8-fps=60&vp8-batch=64&tcp-limit=2&mtu=1040&client-id=default>@019e1742-db64-733a-a991-a570984bdb59#bbb9a2e3613bd4dc93fc88f858e0a4a882b30b55976cb6f408e1f421a9cda9c4$wb-vp8
 ```
+
+## What changed in 1.9.2
+
+- Rebased the local MTS Link olcRTC patch on the latest `refactor/universal-carrier` core.
+- Reworked `seichannel` reliability to ACK individual fragments instead of retrying whole visual messages under loss.
+- Added MTS Link liveness and traffic-shaping defaults for slower H.264/SEI rooms: 30 FPS, batch 8, 700-byte fragments, 10s ACK timeout.
+- Android now prepares an ffmpeg-backed video runtime for `videochannel` from bundled assets or an explicit `android-ffmpeg` path.
+- Windows `0.5.2-beta` packages `wintun.dll` with `tun2socks.exe` for full tunnel mode.
 
 ## What changed in 1.9.1
 
@@ -215,6 +232,11 @@ The script uses:
 ```bash
 OLC_REF=refactor/universal-carrier
 ```
+
+By default it also downloads Android ffmpeg `8.1` for `arm64-v8a`. Use
+`ANDROID_FFMPEG_ABIS=arm64-v8a,armeabi-v7a` to bundle more ABIs,
+`ANDROID_FFMPEG_DIR=/path/to/ffmpeg-assets` to use local binaries, or
+`ANDROID_FFMPEG=0` to build without the video runtime asset.
 
 Override only if you know what you are testing:
 

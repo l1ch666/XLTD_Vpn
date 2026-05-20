@@ -8,7 +8,7 @@ $env:DOTNET_CLI_TELEMETRY_OPTOUT = "1"
 $env:DOTNET_NOLOGO = "1"
 
 $projectRoot = Split-Path -Parent $PSScriptRoot
-$version = "0.5.1-beta"
+$version = "0.5.2-beta"
 $project = Join-Path $projectRoot "windows\XLTD.Vpn.Windows\XLTD.Vpn.Windows.csproj"
 $projectDir = Split-Path -Parent $project
 $toolsDir = Join-Path $projectDir "tools"
@@ -18,8 +18,11 @@ $ffmpegCacheDir = Join-Path $projectRoot ".external\ffmpeg"
 $ffmpegZip = Join-Path $ffmpegCacheDir "ffmpeg-release-essentials.zip"
 $ffmpegExtractDir = Join-Path $ffmpegCacheDir "extract"
 $ffmpegUrl = "https://www.gyan.dev/ffmpeg/builds/ffmpeg-release-essentials.zip"
+$wintunCacheDir = Join-Path $projectRoot ".external\wintun"
+$wintunZip = Join-Path $wintunCacheDir "wintun-0.14.1.zip"
+$wintunExtractDir = Join-Path $wintunCacheDir "extract"
+$wintunUrl = "https://www.wintun.net/builds/wintun-0.14.1.zip"
 $olcrtcPatches = @(
-    (Join-Path $projectRoot "patches\olcrtc-vp8-legacy-binding.patch"),
     (Join-Path $projectRoot "patches\olcrtc-mtslink-carrier.patch")
 )
 $distRoot = Join-Path $projectRoot "dist\windows"
@@ -71,6 +74,54 @@ function Resolve-Ffmpeg {
     }
 
     Copy-Item $ffmpeg.FullName $cached -Force
+    return $cached
+}
+
+function Resolve-WintunDll {
+    if ($env:WINTUN_DLL_PATH -and (Test-Path $env:WINTUN_DLL_PATH)) {
+        return (Resolve-Path $env:WINTUN_DLL_PATH).Path
+    }
+
+    $arch = switch -Regex ($Runtime) {
+        "arm64" { "arm64"; break }
+        "x86" { "x86"; break }
+        default { "amd64" }
+    }
+
+    $knownPaths = @(
+        (Join-Path $wintunCacheDir "wintun.dll"),
+        (Join-Path $wintunCacheDir "bin\$arch\wintun.dll"),
+        (Join-Path $wintunExtractDir "wintun\bin\$arch\wintun.dll"),
+        (Join-Path $projectRoot ".external\tun2socks\wintun.dll"),
+        (Join-Path $projectDir "tools\wintun.dll")
+    )
+
+    foreach ($candidate in $knownPaths) {
+        if (Test-Path $candidate) {
+            return (Resolve-Path $candidate).Path
+        }
+    }
+
+    New-Item -ItemType Directory -Force -Path $wintunCacheDir | Out-Null
+    if (-not (Test-Path $wintunZip)) {
+        Write-Host "Downloading Wintun for full tunnel support..."
+        Invoke-WebRequest -Uri $wintunUrl -OutFile $wintunZip
+    }
+
+    Reset-Directory $wintunExtractDir
+    Expand-Archive -LiteralPath $wintunZip -DestinationPath $wintunExtractDir -Force
+    $wintun = Get-ChildItem -Path $wintunExtractDir -Recurse -Filter wintun.dll |
+        Where-Object { $_.FullName -match "\\bin\\$arch\\wintun\.dll$" } |
+        Select-Object -First 1
+    if (-not $wintun) {
+        $wintun = Get-ChildItem -Path $wintunExtractDir -Recurse -Filter wintun.dll | Select-Object -First 1
+    }
+    if (-not $wintun) {
+        throw "Downloaded Wintun archive did not contain wintun.dll"
+    }
+
+    $cached = Join-Path $wintunCacheDir "wintun.dll"
+    Copy-Item $wintun.FullName $cached -Force
     return $cached
 }
 
@@ -132,6 +183,7 @@ foreach ($patch in $olcrtcPatches) {
 }
 
 $ffmpegSource = Resolve-Ffmpeg
+$wintunSource = Resolve-WintunDll
 
 Reset-Directory $toolsDir
 New-Item -ItemType Directory -Force -Path (Join-Path $toolsDir "data") | Out-Null
@@ -161,6 +213,7 @@ try {
 Copy-Item (Join-Path $olcrtcSource "data\names") (Join-Path $toolsDir "data\names") -Force
 Copy-Item (Join-Path $olcrtcSource "data\surnames") (Join-Path $toolsDir "data\surnames") -Force
 Copy-Item $ffmpegSource (Join-Path $toolsDir "ffmpeg.exe") -Force
+Copy-Item $wintunSource (Join-Path $toolsDir "wintun.dll") -Force
 
 Reset-Directory $publishDir
 

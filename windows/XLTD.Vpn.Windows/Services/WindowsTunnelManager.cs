@@ -32,6 +32,8 @@ internal sealed class WindowsTunnelManager : IDisposable
         }
 
         var exe = ResolveToolPath("tun2socks.exe");
+        var toolsDir = Path.GetDirectoryName(exe) ?? AppContext.BaseDirectory;
+        _ = ResolveToolPath("wintun.dll");
         var args = $"--device tun://{AdapterName} --proxy socks5://{AppInfo.DefaultSocksHost}:{socksPort} --mtu {mtu} --loglevel info";
         var startInfo = new ProcessStartInfo
         {
@@ -41,8 +43,9 @@ internal sealed class WindowsTunnelManager : IDisposable
             CreateNoWindow = true,
             RedirectStandardOutput = true,
             RedirectStandardError = true,
-            WorkingDirectory = Path.GetDirectoryName(exe) ?? AppContext.BaseDirectory
+            WorkingDirectory = toolsDir
         };
+        startInfo.Environment["PATH"] = toolsDir + Path.PathSeparator + (startInfo.Environment.TryGetValue("PATH", out var path) ? path : "");
 
         process = new Process { StartInfo = startInfo, EnableRaisingEvents = true };
         process.OutputDataReceived += (_, e) => Publish(e.Data);
@@ -60,6 +63,10 @@ internal sealed class WindowsTunnelManager : IDisposable
         Publish("tun2socks.exe started");
 
         Thread.Sleep(1800);
+        if (process.HasExited)
+        {
+            throw new InvalidOperationException("tun2socks exited before creating the TUN adapter. Check Runtime log for Wintun or driver errors.");
+        }
         ConfigureInterface();
     }
 
@@ -150,7 +157,10 @@ Set-DnsClientServerAddress -InterfaceIndex $idx -ResetServerAddresses -ErrorActi
     {
         var bundled = Path.Combine(AppContext.BaseDirectory, "tools", fileName);
         if (File.Exists(bundled)) return bundled;
-        throw new FileNotFoundException($"Missing {fileName}. Rebuild the Windows package with scripts/build_windows.ps1.", bundled);
+        var hint = fileName.Equals("wintun.dll", StringComparison.OrdinalIgnoreCase)
+            ? "Missing wintun.dll. Rebuild the Windows package with scripts/build_windows.ps1, or place the official Wintun DLL next to tun2socks.exe."
+            : $"Missing {fileName}. Rebuild the Windows package with scripts/build_windows.ps1.";
+        throw new FileNotFoundException(hint, bundled);
     }
 
     private static string RunPowerShell(string script)

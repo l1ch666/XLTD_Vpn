@@ -135,6 +135,7 @@ internal sealed class CoreProcessManager : IDisposable
     private static string BuildYaml(OlcConfig config, int socksPort, string dataDir)
     {
         var dns = config.Param("dns", AppInfo.DefaultDns);
+        var isMtsLink = IsMtsLink(config);
         var sb = new StringBuilder();
         sb.AppendLine("mode: cnc");
         sb.AppendLine("auth:");
@@ -151,9 +152,10 @@ internal sealed class CoreProcessManager : IDisposable
         sb.AppendLine($"  host: {Yaml(AppInfo.DefaultSocksHost)}");
         sb.AppendLine($"  port: {socksPort}");
         sb.AppendLine("liveness:");
-        sb.AppendLine("  interval: 10s");
-        sb.AppendLine("  timeout: 5s");
-        sb.AppendLine("  failures: 3");
+        sb.AppendLine($"  interval: {Yaml(config.Param("liveness-interval", isMtsLink ? "20s" : "10s"))}");
+        sb.AppendLine($"  timeout: {Yaml(config.Param("liveness-timeout", isMtsLink ? "15s" : "5s"))}");
+        sb.AppendLine($"  failures: {config.IntParam("liveness-failures", isMtsLink ? 6 : 3)}");
+        AppendTrafficOptions(sb, config, isMtsLink);
         AppendTransportOptions(sb, config);
         if (config.Transport == OlcUriParser.TransportVideo)
         {
@@ -198,11 +200,12 @@ internal sealed class CoreProcessManager : IDisposable
 
         if (config.Transport == OlcUriParser.TransportSei)
         {
+            var isMtsLink = string.Equals(config.Carrier, "mtslink", StringComparison.OrdinalIgnoreCase);
             sb.AppendLine("sei:");
-            sb.AppendLine($"  fps: {config.IntParam("fps", config.IntParam("sei-fps", 60))}");
-            sb.AppendLine($"  batch_size: {config.IntParam("batch", config.IntParam("sei-batch", 64))}");
-            sb.AppendLine($"  fragment_size: {config.IntParam("frag", config.IntParam("sei-frag", 900))}");
-            sb.AppendLine($"  ack_timeout_ms: {config.IntParam("ack-ms", config.IntParam("sei-ack-ms", 2000))}");
+            sb.AppendLine($"  fps: {config.IntParam("fps", config.IntParam("sei-fps", isMtsLink ? 30 : 60))}");
+            sb.AppendLine($"  batch_size: {config.IntParam("batch", config.IntParam("sei-batch", isMtsLink ? 8 : 64))}");
+            sb.AppendLine($"  fragment_size: {config.IntParam("frag", config.IntParam("sei-frag", isMtsLink ? 700 : 900))}");
+            sb.AppendLine($"  ack_timeout_ms: {config.IntParam("ack-ms", config.IntParam("sei-ack-ms", isMtsLink ? 10000 : 2000))}");
             return;
         }
 
@@ -220,6 +223,31 @@ internal sealed class CoreProcessManager : IDisposable
             sb.AppendLine($"  qr_recovery: {Yaml(config.Param("video-qr-recovery", "low"))}");
             sb.AppendLine($"  tile_module: {config.IntParam("video-tile-module", 4)}");
             sb.AppendLine($"  tile_rs: {config.IntParam("video-tile-rs", 20)}");
+        }
+    }
+
+    private static void AppendTrafficOptions(StringBuilder sb, OlcConfig config, bool isMtsLink)
+    {
+        var maxPayload = config.IntParam("traffic-max-payload", isMtsLink ? 1200 : 0);
+        var minDelay = config.Param("traffic-min-delay", isMtsLink ? "4ms" : "");
+        var maxDelay = config.Param("traffic-max-delay", isMtsLink ? "18ms" : "");
+        if (maxPayload <= 0 && string.IsNullOrWhiteSpace(minDelay) && string.IsNullOrWhiteSpace(maxDelay))
+        {
+            return;
+        }
+
+        sb.AppendLine("traffic:");
+        if (maxPayload > 0)
+        {
+            sb.AppendLine($"  max_payload_size: {maxPayload}");
+        }
+        if (!string.IsNullOrWhiteSpace(minDelay))
+        {
+            sb.AppendLine($"  min_delay: {Yaml(minDelay)}");
+        }
+        if (!string.IsNullOrWhiteSpace(maxDelay))
+        {
+            sb.AppendLine($"  max_delay: {Yaml(maxDelay)}");
         }
     }
 
