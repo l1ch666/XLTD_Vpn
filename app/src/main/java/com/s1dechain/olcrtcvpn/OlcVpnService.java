@@ -611,6 +611,10 @@ public final class OlcVpnService extends VpnService {
         return config != null && OlcUriParser.TRANSPORT_VIDEO.equals(config.transport);
     }
 
+    private boolean isMtsLink(OlcConfig config) {
+        return config != null && "mtslink".equalsIgnoreCase(config.carrier);
+    }
+
     private boolean isVisualTransport(OlcConfig config) {
         return isVp8(config) || isSei(config) || isVideo(config);
     }
@@ -622,7 +626,7 @@ public final class OlcVpnService extends VpnService {
     }
 
     private int tcpDialLimitForTransport(OlcConfig config) {
-        int fallback = isVisualTransport(config) ? VP8_TCP_DIAL_LIMIT : DATA_TCP_DIAL_LIMIT;
+        int fallback = isMtsLink(config) && isSei(config) ? 2 : (isVisualTransport(config) ? VP8_TCP_DIAL_LIMIT : DATA_TCP_DIAL_LIMIT);
         int requested = config == null ? fallback : config.intParam("tcp-limit", fallback);
         return clampInt(requested, 1, 32);
     }

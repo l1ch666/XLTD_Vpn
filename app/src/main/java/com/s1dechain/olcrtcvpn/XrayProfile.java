@@ -380,7 +380,7 @@ public final class XrayProfile {
     }
 
     private static String extract(String raw) {
-        String value = raw == null ? "" : raw.trim();
+        String value = raw == null ? "" : stripPrefix(raw.trim());
         String lower = value.toLowerCase(Locale.ROOT);
         String[] schemes = new String[]{"xray://", "vless://", "vmess://", "trojan://", "ss://", "socks://", "http-proxy://", "{"};
         int start = -1;
@@ -396,6 +396,18 @@ public final class XrayProfile {
         else if (cr >= 0) end = cr;
         else if (lf >= 0) end = lf;
         return end >= 0 ? value.substring(0, end).trim() : value;
+    }
+
+    private static String stripPrefix(String value) {
+        int start = 0;
+        while (start < value.length()) {
+            char c = value.charAt(start);
+            if (c != '\uFEFF' && c != '\u200B' && c != '\u0000' && !Character.isWhitespace(c)) {
+                break;
+            }
+            start++;
+        }
+        return start == 0 ? value : value.substring(start);
     }
 
     private static String decodePayload(String payload) {

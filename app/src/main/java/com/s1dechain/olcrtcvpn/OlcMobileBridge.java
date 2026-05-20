@@ -302,22 +302,10 @@ public final class OlcMobileBridge {
         int failures = config.intParam("liveness-failures", config.intParam("live-failures", 6));
         setLivenessOptionsIfAvailable(intervalMs, timeoutMs, failures);
 
-        int payloadFloor = mtsLinkPayloadFloor(config);
-        int maxPayload = config.intParam("traffic-max-payload", config.intParam("traffic-max-payload-size", payloadFloor));
-        if (maxPayload > 0 && maxPayload < payloadFloor) {
-            maxPayload = payloadFloor;
-        }
-        int minDelayMs = durationParam(config, 4, "traffic-min-delay");
-        int maxDelayMs = durationParam(config, 18, "traffic-max-delay");
+        int maxPayload = config.intParam("traffic-max-payload", config.intParam("traffic-max-payload-size", 0));
+        int minDelayMs = durationParam(config, 0, "traffic-min-delay");
+        int maxDelayMs = durationParam(config, 0, "traffic-max-delay");
         setTrafficOptionsIfAvailable(maxPayload, minDelayMs, maxDelayMs);
-    }
-
-    private int mtsLinkPayloadFloor(OlcConfig config) {
-        int fragmentSize = config.intParam("frag", config.intParam("sei-frag", 700));
-        if (fragmentSize <= 0) {
-            fragmentSize = 700;
-        }
-        return Math.max(1600, fragmentSize * 8);
     }
 
     private int durationParam(OlcConfig config, int defaultMs, String... keys) {

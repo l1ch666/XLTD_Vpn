@@ -29,7 +29,7 @@ public final class XrayRuntime {
         }
         File config = new File(configDir, "config-" + socksPort + ".json");
         try (FileOutputStream out = new FileOutputStream(config, false)) {
-            out.write(profile.configJson.getBytes(StandardCharsets.UTF_8));
+            out.write(stripJsonPrefix(profile.configJson).getBytes(StandardCharsets.UTF_8));
         }
 
         ProcessBuilder builder = new ProcessBuilder(
@@ -173,6 +173,19 @@ public final class XrayRuntime {
         } catch (Throwable t) {
             Log.w(TAG, "xray log reader failed", t);
         }
+    }
+
+    private static String stripJsonPrefix(String json) {
+        if (json == null) return "";
+        int start = 0;
+        while (start < json.length()) {
+            char c = json.charAt(start);
+            if (c != '\uFEFF' && c != '\u200B' && c != '\u0000' && !Character.isWhitespace(c)) {
+                break;
+            }
+            start++;
+        }
+        return start == 0 ? json : json.substring(start);
     }
 
     private static long pidOf(Process process) {

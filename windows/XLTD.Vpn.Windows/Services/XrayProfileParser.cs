@@ -423,7 +423,7 @@ internal static class XrayProfileParser
 
     private static string ExtractProfile(string? raw)
     {
-        var value = (raw ?? "").Trim();
+        var value = (raw ?? "").Trim().TrimStart('\uFEFF', '\u200B', '\u0000');
         if (value.Length == 0) return value;
         var schemes = new[] { "xray://", "vless://", "vmess://", "trojan://", "ss://", "socks://", "http-proxy://", "{" };
         var lower = value.ToLowerInvariant();

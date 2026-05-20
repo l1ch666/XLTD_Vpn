@@ -7,6 +7,8 @@ namespace XLTD.Vpn.Windows.Services;
 
 internal sealed class XrayProcessManager : IDisposable
 {
+    private static readonly Encoding Utf8NoBom = new UTF8Encoding(encoderShouldEmitUTF8Identifier: false);
+
     private Process? process;
 
     public event Action<string>? LogLine;
@@ -98,8 +100,13 @@ internal sealed class XrayProcessManager : IDisposable
             "runtime");
         Directory.CreateDirectory(dir);
         var path = Path.Combine(dir, "xray-client.json");
-        File.WriteAllText(path, profile.ConfigJson, Encoding.UTF8);
+        File.WriteAllText(path, NormalizeJson(profile.ConfigJson), Utf8NoBom);
         return path;
+    }
+
+    private static string NormalizeJson(string json)
+    {
+        return (json ?? string.Empty).TrimStart('\uFEFF', '\u200B', '\u0000', '\r', '\n', '\t', ' ');
     }
 
     private async Task<bool> TrySocksHandshakeAsync(int port, CancellationToken cancellationToken)

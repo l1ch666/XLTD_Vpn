@@ -1,6 +1,6 @@
 # XLTD VPN alpha / olcRTC Android client
 
-This branch is the isolated `0.0.1-alpha` line for a large Xray backend update.
+This branch is the isolated `0.0.2-alpha` line for a large Xray backend update.
 Stable olcRTC/MTS Link behavior is kept on the main line; the alpha branch adds
 Xray as a parallel backend for Android and Windows.
 
@@ -16,7 +16,7 @@ The repository also contains a separate Windows client:
 windows/XLTD.Vpn.Windows
 ```
 
-Windows uses its own version line. Current Windows alpha on this branch: `0.0.1-alpha`. Build it with:
+Windows uses its own version line. Current Windows alpha on this branch: `0.0.2-alpha`. Build it with:
 
 ```powershell
 powershell -ExecutionPolicy Bypass -File scripts/build_windows.ps1
@@ -167,11 +167,12 @@ Example:
 olcrtc://wbstream?vp8channel<vp8-fps=60&vp8-batch=64&tcp-limit=2&mtu=1040&client-id=default>@019e1742-db64-733a-a991-a570984bdb59#bbb9a2e3613bd4dc93fc88f858e0a4a882b30b55976cb6f408e1f421a9cda9c4$wb-vp8
 ```
 
-## What changed in 1.9.4
+## What changed in 0.0.2-alpha
 
-- Raised MTS Link traffic payload handling from the old 1200-byte cap to a dynamic `frag * 8` floor, so larger SEI frames and old saved profiles do not kill the control stream.
+- Fixed MTS Link `seichannel` smux payload sizing to account for both smux headers and crypto overhead, so profiles like `fps=60&batch=64&frag=900&ack-ms=2000` do not trip the old `1208 > 1200` failure.
+- Removed the automatic MTS Link traffic throttle from Windows and Android configs; `traffic-max-payload` / `traffic-min-delay` are now opt-in diagnostics.
 - Windows full tunnel now routes DNS servers outside the TUN adapter and shortens UDP sessions, reducing UDP-over-SOCKS5 failure storms when the olcRTC SOCKS endpoint is TCP-only.
-- Windows `0.5.4-beta` carries the same MTS Link payload and full-tunnel fixes.
+- Windows `0.0.2-alpha` carries the same MTS Link payload and full-tunnel fixes.
 
 ## What changed in 1.9.3
 

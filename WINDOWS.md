@@ -2,8 +2,8 @@
 
 Windows is versioned separately from Android.
 
-- Android alpha line: `0.0.1-alpha`
-- Windows alpha line: `0.0.1-alpha`
+- Android alpha line: `0.0.2-alpha`
+- Windows alpha line: `0.0.2-alpha`
 
 The current Windows alpha keeps the conservative local SOCKS/proxy path and adds an experimental full tunnel path:
 
@@ -29,7 +29,7 @@ powershell -ExecutionPolicy Bypass -File scripts/build_windows.ps1
 Output:
 
 ```text
-dist/windows/XLTD_Vpn-Windows-0.0.1-alpha-win-x64.zip
+dist/windows/XLTD_Vpn-Windows-0.0.2-alpha-win-x64.zip
 ```
 
 The package contains:
