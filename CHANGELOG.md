@@ -1,5 +1,15 @@
 # Changelog
 
+## 1.9.3-universal-carrier
+
+- Switched Android core builds to `l1ch666/mtsRTC` `mtslink-universal-carrier` instead of applying the MTS patch onto fresh upstream.
+- Rebuilt the combo AAR from the patched fork where `seichannel` ACKs individual fragments and uses safer MTS Link defaults.
+
+## Windows 0.5.3-beta
+
+- Switched Windows `olcrtc.exe` builds to `l1ch666/mtsRTC` `mtslink-universal-carrier`.
+- Rebuilt the Windows package from the patched fork without rebasing the core on newer upstream olcRTC.
+
 ## 1.9.2-universal-carrier
 
 - Rebased the local MTS Link olcRTC fork patch on the latest `refactor/universal-carrier` core.

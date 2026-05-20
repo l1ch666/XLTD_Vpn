@@ -8,11 +8,13 @@ $env:DOTNET_CLI_TELEMETRY_OPTOUT = "1"
 $env:DOTNET_NOLOGO = "1"
 
 $projectRoot = Split-Path -Parent $PSScriptRoot
-$version = "0.5.2-beta"
+$version = "0.5.3-beta"
 $project = Join-Path $projectRoot "windows\XLTD.Vpn.Windows\XLTD.Vpn.Windows.csproj"
 $projectDir = Split-Path -Parent $project
 $toolsDir = Join-Path $projectDir "tools"
 $olcrtcSource = Join-Path $projectRoot ".external\olcrtc"
+$olcrtcRepo = if ($env:OLC_REPO) { $env:OLC_REPO } else { "https://github.com/l1ch666/mtsRTC.git" }
+$olcrtcRef = if ($env:OLC_REF) { $env:OLC_REF } else { "mtslink-universal-carrier" }
 $tun2socksSource = Join-Path $projectRoot ".external\tun2socks"
 $ffmpegCacheDir = Join-Path $projectRoot ".external\ffmpeg"
 $ffmpegZip = Join-Path $ffmpegCacheDir "ffmpeg-release-essentials.zip"
@@ -22,9 +24,7 @@ $wintunCacheDir = Join-Path $projectRoot ".external\wintun"
 $wintunZip = Join-Path $wintunCacheDir "wintun-0.14.1.zip"
 $wintunExtractDir = Join-Path $wintunCacheDir "extract"
 $wintunUrl = "https://www.wintun.net/builds/wintun-0.14.1.zip"
-$olcrtcPatches = @(
-    (Join-Path $projectRoot "patches\olcrtc-mtslink-carrier.patch")
-)
+$olcrtcPatches = if ($env:OLC_PATCHES) { $env:OLC_PATCHES -split ";" } else { @() }
 $distRoot = Join-Path $projectRoot "dist\windows"
 $publishDir = Join-Path $distRoot "XLTD_Vpn_Windows-$version-$Runtime"
 $zipPath = Join-Path $distRoot "XLTD_Vpn-Windows-$version-$Runtime.zip"
@@ -162,6 +162,56 @@ function Apply-GitPatchIfNeeded([string]$Repo, [string]$Patch) {
     }
 }
 
+function Ensure-OlcRtcSource {
+    if (-not (Test-Path (Join-Path $olcrtcSource ".git"))) {
+        New-Item -ItemType Directory -Force -Path (Split-Path -Parent $olcrtcSource) | Out-Null
+        Write-Host "Cloning olcRTC ref $olcrtcRef from $olcrtcRepo..."
+        & git clone --branch $olcrtcRef --recurse-submodules $olcrtcRepo $olcrtcSource
+        if ($LASTEXITCODE -ne 0) {
+            throw "git clone olcrtc failed with exit code $LASTEXITCODE"
+        }
+        return
+    }
+
+    Push-Location $olcrtcSource
+    try {
+        $currentUrl = (& git remote get-url origin 2>$null)
+        if ($currentUrl -ne $olcrtcRepo) {
+            & git remote set-url origin $olcrtcRepo
+            if ($LASTEXITCODE -ne 0) {
+                throw "git remote set-url failed with exit code $LASTEXITCODE"
+            }
+        }
+
+        & git fetch origin $olcrtcRef
+        if ($LASTEXITCODE -ne 0) {
+            throw "git fetch olcrtc ref $olcrtcRef failed with exit code $LASTEXITCODE"
+        }
+
+        & git show-ref --verify --quiet "refs/heads/$olcrtcRef"
+        if ($LASTEXITCODE -eq 0) {
+            & git checkout $olcrtcRef
+        } else {
+            & git checkout -b $olcrtcRef "origin/$olcrtcRef"
+        }
+        if ($LASTEXITCODE -ne 0) {
+            throw "git checkout olcrtc ref $olcrtcRef failed with exit code $LASTEXITCODE"
+        }
+
+        & git pull --ff-only origin $olcrtcRef
+        if ($LASTEXITCODE -ne 0) {
+            Write-Warning "Could not fast-forward olcrtc source; using checked out tree as-is."
+        }
+
+        & git submodule update --init --recursive
+        if ($LASTEXITCODE -ne 0) {
+            Write-Warning "Could not update olcrtc submodules; continuing with existing checkout."
+        }
+    } finally {
+        Pop-Location
+    }
+}
+
 if (-not (Get-Command go -ErrorAction SilentlyContinue)) {
     throw "Go is required to build olcrtc.exe"
 }
@@ -170,9 +220,7 @@ if (-not (Get-Command dotnet -ErrorAction SilentlyContinue)) {
     throw ".NET SDK is required to build the Windows GUI"
 }
 
-if (-not (Test-Path $olcrtcSource)) {
-    throw "Missing local olcrtc source at $olcrtcSource. Rebuild/fetch .external first."
-}
+Ensure-OlcRtcSource
 
 if (-not (Test-Path $tun2socksSource)) {
     throw "Missing local tun2socks source at $tun2socksSource. Rebuild/fetch .external first."

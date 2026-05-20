@@ -389,7 +389,7 @@ public final class OlcMobileBridge {
             return;
         } catch (NoSuchMethodException noStartWithTransport) {
             if (!OlcUriParser.TRANSPORT_DATA.equals(transport) && !transportApplied) {
-                throw new IllegalStateException("combo AAR has no StartWithTransport/SetTransport for " + transport + "; rebuild app/libs/olcrtccombo.aar from refactor/universal-carrier");
+                throw new IllegalStateException("combo AAR has no StartWithTransport/SetTransport for " + transport + "; rebuild app/libs/olcrtccombo.aar from l1ch666/mtsRTC mtslink-universal-carrier");
             }
         }
 

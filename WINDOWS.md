@@ -10,7 +10,7 @@ The current Windows beta keeps the conservative local SOCKS/proxy path and adds 
 - Native WinForms GUI.
 - Local profile storage under `%APPDATA%\XLTD_Vpn\windows-profiles.json`.
 - Same `olcrtc://` URI parser contract as Android.
-- Bundled `olcrtc.exe` built from the local `openlibrecommunity/olcrtc` source snapshot.
+- Bundled `olcrtc.exe` built from `l1ch666/mtsRTC` `mtslink-universal-carrier` by default.
 - Local SOCKS mode on `127.0.0.1:10808`.
 - Optional Windows user proxy mode while connected. It stores the previous proxy settings and restores them on stop/exit.
 - Experimental full tunnel mode through bundled `tun2socks.exe` and `wintun.dll`. This mode requires launching the app as Administrator.
@@ -28,7 +28,7 @@ powershell -ExecutionPolicy Bypass -File scripts/build_windows.ps1
 Output:
 
 ```text
-dist/windows/XLTD_Vpn-Windows-0.5.2-beta-win-x64.zip
+dist/windows/XLTD_Vpn-Windows-0.5.3-beta-win-x64.zip
 ```
 
 The package contains:
@@ -51,7 +51,7 @@ powershell -ExecutionPolicy Bypass -File scripts/build_windows.ps1 -SelfContaine
 
 Feature parity changes should move Android and Windows in parallel by intent, but each platform keeps its own patch number:
 
-- Android: `1.9.2`, `2.0.0`, etc.
-- Windows: `0.5.2-beta`, `0.6.0-beta`, etc.
+- Android: `1.9.3`, `2.0.0`, etc.
+- Windows: `0.5.3-beta`, `0.6.0-beta`, etc.
 
 Small platform-only bugfixes update only the platform they touch.

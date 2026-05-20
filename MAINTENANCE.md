@@ -27,13 +27,14 @@ gradle clean :app:assembleDebug
 `videochannel`. Generated binaries under `app/src/main/assets/ffmpeg/*/ffmpeg`
 stay out of git; rebuild the AAR/APK to refresh them.
 
-Both Android and Windows build helpers apply tracked patches from `patches/`
-to the local `.external/olcrtc` checkout before compiling bundled core code.
+Both Android and Windows build helpers use `l1ch666/mtsRTC`
+`mtslink-universal-carrier` by default. Set `OLC_REPO`, `OLC_REF`, and
+`OLC_PATCHES` only when intentionally testing another olcRTC source.
 
 ## Versioning
 
 - Bump `versionCode` for every user-visible or behavioral improvement.
-- Bump `versionName` with the same intent, for example `1.9.2-universal-carrier`.
+- Bump `versionName` with the same intent, for example `1.9.3-universal-carrier`.
 - Add a short entry to `CHANGELOG.md` before publishing.
 - Keep Windows versioning separate under `windows/XLTD.Vpn.Windows`:
   - Android stable line: `1.9.x-universal-carrier`.
@@ -49,7 +50,7 @@ Build the Windows GUI and bundled core:
 powershell -ExecutionPolicy Bypass -File scripts/build_windows.ps1
 ```
 
-The helper writes `dist/windows/XLTD_Vpn-Windows-0.5.2-beta-win-x64.zip` and prints SHA256 for the GitHub pre-release.
+The helper writes `dist/windows/XLTD_Vpn-Windows-0.5.3-beta-win-x64.zip` and prints SHA256 for the GitHub pre-release.
 
 ## GitHub publishing
 
@@ -61,6 +62,6 @@ Before publishing:
 2. Commit only source, scripts, and documentation changes.
 3. Build the debug APK with `scripts/build_apk.ps1`.
 4. Build the Windows beta package with `scripts/build_windows.ps1` when a Windows change is included.
-5. Upload Android APKs to stable Android tags such as `v1.9.2`.
-6. Upload Windows beta zips to pre-release Windows tags such as `windows-v0.5.2-beta`.
+5. Upload Android APKs to stable Android tags such as `v1.9.3`.
+6. Upload Windows beta zips to pre-release Windows tags such as `windows-v0.5.3-beta`.
 7. Include the SHA256 printed by each build helper in the release notes.

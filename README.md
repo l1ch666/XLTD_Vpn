@@ -1,6 +1,6 @@
-# olcRTC Android client - 1.9.2 universal-carrier
+# olcRTC Android client - 1.9.3 universal-carrier
 
-This build updates the Android client for the `openlibrecommunity/olcrtc` `refactor/universal-carrier` branch.
+This build uses the `l1ch666/mtsRTC` `mtslink-universal-carrier` fork for the bundled olcRTC core.
 
 Main point: the old app was mostly `datachannel/vp8channel`-only and expected the older URI layout with `%clientId`. The universal-carrier branch changes carrier/transport compatibility and the client URI docs no longer require `%clientId`, so the Android parser and combo AAR builder were updated.
 
@@ -12,7 +12,7 @@ The repository now also contains a separate Windows beta client:
 windows/XLTD.Vpn.Windows
 ```
 
-Windows uses its own version line. Current Windows beta: `0.5.2-beta`. Build it with:
+Windows uses its own version line. Current Windows beta: `0.5.3-beta`. Build it with:
 
 ```powershell
 powershell -ExecutionPolicy Bypass -File scripts/build_windows.ps1
@@ -35,7 +35,7 @@ Reality check for Android VPN mode:
 - `vp8channel` is the main stable media transport for `telemost` / `wbstream`.
 - `seichannel` is accepted and passed into the new Android core. MTS Link now uses slower defaults for bursty H.264/SEI traffic.
 - `videochannel` can run on Android when the combo AAR is built with the bundled Android ffmpeg asset, or when a profile supplies `android-ffmpeg=<path>`.
-- `mtslink` is a local olcRTC fork carrier that uses `videochannel` over H.264. See `MTSLINK.md`.
+- `mtslink` is a local olcRTC fork carrier that uses `seichannel` over H.264/SEI. See `MTSLINK.md`.
 
 ## URI support
 
@@ -93,6 +93,15 @@ frag=900
 ack-ms=2000
 ```
 
+For MTS Link, use the safer default profile:
+
+```text
+fps=30
+batch=8
+frag=700
+ack-ms=10000
+```
+
 ### Video
 
 ```text
@@ -133,6 +142,13 @@ Example:
 ```text
 olcrtc://wbstream?vp8channel<vp8-fps=60&vp8-batch=64&tcp-limit=2&mtu=1040&client-id=default>@019e1742-db64-733a-a991-a570984bdb59#bbb9a2e3613bd4dc93fc88f858e0a4a882b30b55976cb6f408e1f421a9cda9c4$wb-vp8
 ```
+
+## What changed in 1.9.3
+
+- Patched `l1ch666/mtsRTC` directly on `mtslink-universal-carrier` instead of rebasing the MTS core onto newer upstream olcRTC.
+- Switched Android and Windows build scripts to use `mtsRTC` by default, so rebuilt cores come from the patched fork as-is.
+- Rebuilt Android and Windows artifacts from the fixed fork.
+- Windows `0.5.3-beta` carries the same corrected core source selection.
 
 ## What changed in 1.9.2
 
@@ -208,7 +224,7 @@ powershell -ExecutionPolicy Bypass -File scripts/run_parser_contract_test.ps1
 
 ## What changed in 1.6.0
 
-- `scripts/build_combo_aar.sh` now targets `refactor/universal-carrier` by default.
+- `scripts/build_combo_aar.sh` now targets the configured olcRTC fork/ref by default.
 - Combo AAR glue now passes the new `engine/url/token` tail args used by the universal-carrier client path.
 - Combo AAR glue applies `session.ApplyAuthDefaults(...)` before starting the client.
 - Parser accepts the new no-`%clientId` URI and defaults to `clientId=default`.
@@ -230,7 +246,8 @@ bash scripts/build_combo_aar.sh
 The script uses:
 
 ```bash
-OLC_REF=refactor/universal-carrier
+OLC_REPO=https://github.com/l1ch666/mtsRTC.git
+OLC_REF=mtslink-universal-carrier
 ```
 
 By default it also downloads Android ffmpeg `8.1` for `arm64-v8a`. Use
@@ -241,7 +258,7 @@ By default it also downloads Android ffmpeg `8.1` for `arm64-v8a`. Use
 Override only if you know what you are testing:
 
 ```bash
-OLC_REF=master bash scripts/build_combo_aar.sh
+OLC_REPO=https://github.com/openlibrecommunity/olcrtc.git OLC_REF=master OLC_PATCHES="$PWD/patches/olcrtc-mtslink-carrier.patch" bash scripts/build_combo_aar.sh
 ```
 
 Then build APK in Android Studio:

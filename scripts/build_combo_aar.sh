@@ -11,20 +11,30 @@ ANDROID_FFMPEG_VERSION="${ANDROID_FFMPEG_VERSION:-8.1}"
 ANDROID_FFMPEG_ABIS="${ANDROID_FFMPEG_ABIS:-arm64-v8a}"
 ANDROID_FFMPEG_ASSETS_DIR="${PROJECT_ROOT}/app/src/main/assets/ffmpeg"
 ANDROID_FFMPEG_CACHE_DIR="${EXT}/ffmpeg-android"
-OLC_REF="${OLC_REF:-refactor/universal-carrier}"
+OLC_REPO="${OLC_REPO:-https://github.com/l1ch666/mtsRTC.git}"
+OLC_REF="${OLC_REF:-mtslink-universal-carrier}"
+OLC_PATCHES="${OLC_PATCHES:-}"
 
 mkdir -p "${EXT}" "${PROJECT_ROOT}/app/libs"
 
 clone_olcrtc() {
   if [ ! -d "${OLC_DIR}/.git" ]; then
-    echo "Cloning olcRTC ref ${OLC_REF}..."
-    git clone --branch "${OLC_REF}" --recurse-submodules https://github.com/openlibrecommunity/olcrtc "${OLC_DIR}"
+    echo "Cloning olcRTC ref ${OLC_REF} from ${OLC_REPO}..."
+    git clone --branch "${OLC_REF}" --recurse-submodules "${OLC_REPO}" "${OLC_DIR}"
   else
-    echo "Using existing olcRTC tree; trying to switch to ${OLC_REF}."
+    echo "Using existing olcRTC tree; trying to switch to ${OLC_REF} from ${OLC_REPO}."
     (
       cd "${OLC_DIR}"
+      current_url="$(git remote get-url origin 2>/dev/null || true)"
+      if [ "${current_url}" != "${OLC_REPO}" ]; then
+        git remote set-url origin "${OLC_REPO}"
+      fi
       if git fetch origin "${OLC_REF}"; then
-        git checkout "${OLC_REF}"
+        if git show-ref --verify --quiet "refs/heads/${OLC_REF}"; then
+          git checkout "${OLC_REF}"
+        else
+          git checkout -b "${OLC_REF}" "origin/${OLC_REF}"
+        fi
         git pull --ff-only origin "${OLC_REF}" || true
         git submodule update --init --recursive || true
       else
@@ -49,9 +59,12 @@ clone_olcrtc
 clone_if_missing "https://github.com/xjasonlyu/tun2socks" "${TUN_DIR}"
 
 apply_olcrtc_patch() {
+  if [ -z "${OLC_PATCHES}" ]; then
+    echo "No local olcRTC patch configured; using ${OLC_REPO}@${OLC_REF} as-is."
+    return
+  fi
   local patch
-  for patch in \
-    "${PROJECT_ROOT}/patches/olcrtc-mtslink-carrier.patch"; do
+  for patch in ${OLC_PATCHES}; do
     if [ ! -f "${patch}" ]; then
       continue
     fi
