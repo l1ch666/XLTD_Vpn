@@ -43,8 +43,8 @@ sei:
   ack_timeout_ms: 2000
 liveness:
   interval: 20s
-  timeout: 15s
-  failures: 6
+  timeout: 60s
+  failures: 3
 ffmpeg: "ffmpeg"
 debug: false
 ```
@@ -60,28 +60,36 @@ Run:
 The matching client profile URI is:
 
 ```text
-olcrtc://mtslink?seichannel<fps=30&batch=8&frag=700&ack-ms=10000&liveness-interval=20s&liveness-timeout=15s&liveness-failures=6&mts-peer-update=1&mts-silent-audio=1&mts-force-video=1>@https%3A%2F%2Fmy.mts-link.ru%2Fj%2F167846474%2F19645959806#64_hex_key_here$MTS%20Link
+olcrtc://mtslink?seichannel<fps=30&batch=8&frag=700&ack-ms=10000&liveness-interval=20s&liveness-timeout=60s&liveness-failures=3&mts-peer-update=1&mts-silent-audio=1&mts-force-video=1>@https%3A%2F%2Fmy.mts-link.ru%2Fj%2F167846474%2F19645959806#64_hex_key_here$MTS%20Link
 ```
 
 For a wider SEI channel, use the same settings as the server:
 
 ```text
-olcrtc://mtslink?seichannel<fps=60&batch=64&frag=900&ack-ms=2000&liveness-interval=20s&liveness-timeout=15s&liveness-failures=6&mts-peer-update=1&mts-silent-audio=1&mts-force-video=1>@https%3A%2F%2Fmy.mts-link.ru%2Fj%2F167846474%2F19645959806#64_hex_key_here$MTS%20Link
+olcrtc://mtslink?seichannel<fps=60&batch=64&frag=900&ack-ms=2000&liveness-interval=20s&liveness-timeout=60s&liveness-failures=3&mts-peer-update=1&mts-silent-audio=1&mts-force-video=1>@https%3A%2F%2Fmy.mts-link.ru%2Fj%2F167846474%2F19645959806#64_hex_key_here$MTS%20Link
 ```
+
+The default client liveness for `mtslink + seichannel` now matches the wider
+profile above even if the URI omits explicit `liveness-*` parameters.
+The core also caps one smux frame to `fragment_size * 3` SEI fragments
+(`2700` bytes with `frag=900`) and limits this transport to three concurrent
+SOCKS tunnels. This is intentional: MTS Link can deliver large SEI bursts, but
+too many browser preconnects can starve the control stream and trigger false
+`missed pong` reconnects.
 
 Do not set `traffic-max-payload` or `traffic-min-delay` unless you are
 debugging a specific room. The core now sizes smux frames from the SEI fragment
 limit and includes the smux header plus crypto overhead, so an old artificial
 1200-byte traffic cap is no longer needed and can make pages feel stalled.
 
-XLTD VPN `0.0.2-alpha` bundles `ffmpeg.exe`, `wintun.dll`, and the updated
-local core on Windows. Android `0.0.2-alpha` can run media transports when the
+XLTD VPN `0.0.3-alpha` bundles `ffmpeg.exe`, `wintun.dll`, and the updated
+local core on Windows. Android `0.0.3-alpha` can run media transports when the
 combo AAR is built with the Android ffmpeg asset or the profile supplies
 `android-ffmpeg=<path>`.
 
-`0.0.2-alpha` builds the core from the patched `l1ch666/mtsRTC`
+`0.0.3-alpha` builds the core from the patched `l1ch666/mtsRTC`
 fork without rebasing onto newer upstream olcRTC. The fork switches
-`seichannel` to per-fragment ACKs. This
+`seichannel` to per-fragment ACKs and uses the smaller smux burst cap above. This
 targets the case where MTS joined successfully, SOCKS became ready, and then
 the control stream died with `seichannel ack timeout` or missed pongs under
 traffic bursts.

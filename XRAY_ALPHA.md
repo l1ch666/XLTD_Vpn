@@ -1,12 +1,12 @@
 # XLTD VPN Xray alpha
 
-This branch is the isolated `0.0.2-alpha` line for adding an Xray backend to
+This branch is the isolated `0.0.3-alpha` line for adding an Xray backend to
 XLTD VPN without breaking the current olcRTC/MTS Link client path.
 
 ## Scope
 
-- Android app version: `0.0.2-alpha`.
-- Windows app version: `0.0.2-alpha`.
+- Android app version: `0.0.3-alpha`.
+- Windows app version: `0.0.3-alpha`.
 - Xray-core version pinned by build scripts: `v26.5.9`.
 - Android bundles an official native Xray binary under `assets/xray/<abi>/xray`.
 - Windows bundles `tools/xray.exe`, `geoip.dat`, and `geosite.dat`.
@@ -86,7 +86,7 @@ powershell -ExecutionPolicy Bypass -File scripts/build_windows.ps1 -Runtime win-
 Output:
 
 ```text
-dist/windows/XLTD_Vpn-Windows-0.0.2-alpha-win-x64.zip
+dist/windows/XLTD_Vpn-Windows-0.0.3-alpha-win-x64.zip
 ```
 
 The build downloads the matching official Xray-core Windows asset and packages

@@ -1,6 +1,6 @@
 # XLTD VPN alpha / olcRTC Android client
 
-This branch is the isolated `0.0.2-alpha` line for a large Xray backend update.
+This branch is the isolated `0.0.3-alpha` line for a large Xray backend update.
 Stable olcRTC/MTS Link behavior is kept on the main line; the alpha branch adds
 Xray as a parallel backend for Android and Windows.
 
@@ -16,7 +16,7 @@ The repository also contains a separate Windows client:
 windows/XLTD.Vpn.Windows
 ```
 
-Windows uses its own version line. Current Windows alpha on this branch: `0.0.2-alpha`. Build it with:
+Windows uses its own version line. Current Windows alpha on this branch: `0.0.3-alpha`. Build it with:
 
 ```powershell
 powershell -ExecutionPolicy Bypass -File scripts/build_windows.ps1
@@ -166,6 +166,14 @@ Example:
 ```text
 olcrtc://wbstream?vp8channel<vp8-fps=60&vp8-batch=64&tcp-limit=2&mtu=1040&client-id=default>@019e1742-db64-733a-a991-a570984bdb59#bbb9a2e3613bd4dc93fc88f858e0a4a882b30b55976cb6f408e1f421a9cda9c4$wb-vp8
 ```
+
+## What changed in 0.0.3-alpha
+
+- Updated the bundled MTS Link core to `l1ch666/mtsRTC` `ca04cc2`.
+- MTS Link `seichannel` now caps smux frames to small SEI bursts (`fragment_size * 3`, capped at 7 KiB) so large page loads do not starve control ping/pong.
+- Default MTS Link `seichannel` liveness is now `20s` interval, `60s` timeout, and `3` failures.
+- MTS Link `seichannel` clients limit themselves to three concurrent SOCKS tunnels to keep browser preconnect storms from overwhelming the H.264 media path.
+- Reconnect handshakes now use the normal handshake timeout instead of the previous 2s reconnect shortcut.
 
 ## What changed in 0.0.2-alpha
 

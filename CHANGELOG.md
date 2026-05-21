@@ -1,5 +1,13 @@
 # Changelog
 
+## XLTD VPN 0.0.3-alpha
+
+- Updated bundled MTS Link core to `l1ch666/mtsRTC` `ca04cc2`.
+- Reduced MTS Link `seichannel` smux frame size to small SEI bursts so page loads do not starve control ping/pong.
+- Relaxed default MTS Link `seichannel` liveness to `20s` interval, `60s` timeout, and `3` failures.
+- Limited MTS Link `seichannel` clients to three concurrent SOCKS tunnels to keep browser preconnect storms from collapsing the media channel.
+- Reconnect handshakes now use the normal handshake timeout instead of a 2s shortcut, reducing false reconnect churn on slow visual media.
+
 ## XLTD VPN 0.0.2-alpha
 
 - Added an isolated Xray backend branch for Android and Windows without replacing the existing olcRTC backend.
