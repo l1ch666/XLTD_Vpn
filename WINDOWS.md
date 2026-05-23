@@ -1,11 +1,11 @@
-# XLTD VPN Windows beta
+# XLTD VPN Windows alpha
 
 Windows is versioned separately from Android.
 
-- Android current line: `1.9.x-universal-carrier`
-- Windows beta line: `0.5.x-beta`
+- Android alpha line: `0.0.3-alpha`
+- Windows alpha line: `0.0.3-alpha`
 
-The current Windows beta keeps the conservative local SOCKS/proxy path and adds an experimental full tunnel path:
+The current Windows alpha keeps the conservative local SOCKS/proxy path and adds an experimental full tunnel path:
 
 - Native WinForms GUI.
 - Local profile storage under `%APPDATA%\XLTD_Vpn\windows-profiles.json`.
@@ -16,6 +16,7 @@ The current Windows beta keeps the conservative local SOCKS/proxy path and adds 
 - Experimental full tunnel mode through bundled `tun2socks.exe` and `wintun.dll`. This mode requires launching the app as Administrator.
 - Bundled `ffmpeg.exe` for `videochannel` profiles.
 - Experimental `mtslink` carrier profiles over H.264 media (`seichannel` for VPN traffic, `videochannel` for diagnostics).
+- Experimental Xray backend profiles (`vless`, `vmess`, `trojan`, `shadowsocks`, `socks`, `http`, and raw Xray JSON) through bundled `xray.exe`.
 
 The beta does not install a permanent Windows service. Full tunnel route/DNS setup is applied at connect time and rolled back at stop/exit. If a carrier reconnect loops through the tunnel on a specific network, switch back to local SOCKS or user proxy mode for that profile until the next tunnel hardening pass.
 
@@ -28,7 +29,7 @@ powershell -ExecutionPolicy Bypass -File scripts/build_windows.ps1
 Output:
 
 ```text
-dist/windows/XLTD_Vpn-Windows-0.5.4-beta-win-x64.zip
+dist/windows/XLTD_Vpn-Windows-0.0.3-alpha-win-x64.zip
 ```
 
 The package contains:
@@ -38,6 +39,9 @@ The package contains:
 - `tools/tun2socks.exe`
 - `tools/wintun.dll`
 - `tools/ffmpeg.exe`
+- `tools/xray.exe`
+- `tools/geoip.dat`
+- `tools/geosite.dat`
 - `tools/data/names`
 - `tools/data/surnames`
 
@@ -51,7 +55,7 @@ powershell -ExecutionPolicy Bypass -File scripts/build_windows.ps1 -SelfContaine
 
 Feature parity changes should move Android and Windows in parallel by intent, but each platform keeps its own patch number:
 
-- Android: `1.9.4`, `2.0.0`, etc.
-- Windows: `0.5.4-beta`, `0.6.0-beta`, etc.
+- Android: `0.0.1-alpha`, then `0.0.2-alpha`, `0.0.3-alpha`, etc. while Xray is isolated.
+- Windows: `0.0.1-alpha`, then `0.0.2-alpha`, `0.0.3-alpha`, etc. while Xray is isolated.
 
 Small platform-only bugfixes update only the platform they touch.

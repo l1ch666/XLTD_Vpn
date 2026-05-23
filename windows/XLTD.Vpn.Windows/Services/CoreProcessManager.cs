@@ -228,14 +228,9 @@ internal sealed class CoreProcessManager : IDisposable
 
     private static void AppendTrafficOptions(StringBuilder sb, OlcConfig config, bool isMtsLink)
     {
-        var mtsPayloadFloor = isMtsLink ? MtsLinkPayloadFloor(config) : 0;
-        var maxPayload = config.IntParam("traffic-max-payload", mtsPayloadFloor);
-        if (isMtsLink && maxPayload > 0 && maxPayload < mtsPayloadFloor)
-        {
-            maxPayload = mtsPayloadFloor;
-        }
-        var minDelay = config.Param("traffic-min-delay", isMtsLink ? "4ms" : "");
-        var maxDelay = config.Param("traffic-max-delay", isMtsLink ? "18ms" : "");
+        var maxPayload = config.IntParam("traffic-max-payload", config.IntParam("traffic-max-payload-size", 0));
+        var minDelay = config.Param("traffic-min-delay", "");
+        var maxDelay = config.Param("traffic-max-delay", "");
         if (maxPayload <= 0 && string.IsNullOrWhiteSpace(minDelay) && string.IsNullOrWhiteSpace(maxDelay))
         {
             return;
@@ -254,16 +249,6 @@ internal sealed class CoreProcessManager : IDisposable
         {
             sb.AppendLine($"  max_delay: {Yaml(maxDelay)}");
         }
-    }
-
-    private static int MtsLinkPayloadFloor(OlcConfig config)
-    {
-        var fragmentSize = config.IntParam("frag", config.IntParam("sei-frag", 700));
-        if (fragmentSize <= 0)
-        {
-            fragmentSize = 700;
-        }
-        return Math.Max(1600, fragmentSize * 8);
     }
 
     private static string Yaml(string value)

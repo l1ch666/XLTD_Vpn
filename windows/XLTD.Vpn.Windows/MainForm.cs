@@ -10,6 +10,7 @@ internal sealed class MainForm : Form
 {
     private readonly ProfileStore profileStore = new();
     private readonly CoreProcessManager core = new();
+    private readonly XrayProcessManager xray = new();
     private readonly WindowsTunnelManager tunnel = new();
     private readonly WindowsProxyManager proxy = new();
     private readonly List<Profile> profiles;
@@ -38,13 +39,14 @@ internal sealed class MainForm : Form
         BuildUi();
         WireEvents();
         RefreshProfiles();
-        SetStatus("Ready. Add or select an olcRTC profile.");
+        SetStatus("Ready. Add or select an olcRTC/Xray profile.");
     }
 
     protected override void OnFormClosing(FormClosingEventArgs e)
     {
         tunnel.Dispose();
         proxy.Restore();
+        xray.Dispose();
         core.Dispose();
         base.OnFormClosing(e);
     }
@@ -125,7 +127,7 @@ internal sealed class MainForm : Form
         StyleTextBox(nameBox);
         layout.Controls.Add(nameBox, 0, 1);
 
-        linkBox.PlaceholderText = "olcrtc://carrier?transport<params>@room#64hexkey$comment";
+        linkBox.PlaceholderText = "olcrtc://carrier?transport<params>@room#64hexkey$comment\r\nor Xray: vless://..., vmess://..., trojan://..., ss://..., xray://base64-json";
         linkBox.Multiline = true;
         linkBox.ScrollBars = ScrollBars.Vertical;
         StyleTextBox(linkBox);
@@ -243,6 +245,7 @@ internal sealed class MainForm : Form
         deleteButton.Click += (_, _) => DeleteSelectedProfile();
         connectButton.Click += async (_, _) => await ToggleConnectionAsync();
         core.LogLine += line => Ui(() => HandleCoreLogLine(line));
+        xray.LogLine += line => Ui(() => HandleXrayLogLine(line));
         tunnel.LogLine += line => Ui(() => AppendLog("[tunnel] " + line));
         core.Exited += code => Ui(() =>
         {
@@ -251,6 +254,13 @@ internal sealed class MainForm : Form
             connectButton.Text = "Connect";
             SetStatus(code.HasValue ? $"Core exited with code {code}" : "Core stopped");
         });
+        xray.Exited += code => Ui(() =>
+        {
+            tunnel.Stop();
+            proxy.Restore();
+            connectButton.Text = "Connect";
+            SetStatus(code.HasValue ? $"Xray exited with code {code}" : "Xray stopped");
+        });
     }
 
     private void SaveProfile()
@@ -258,13 +268,23 @@ internal sealed class MainForm : Form
         try
         {
             var link = linkBox.Text.Trim();
-            var config = OlcUriParser.Parse(link);
             var selected = profilesList.SelectedItem as Profile;
             var profile = selected ?? new Profile { Id = "p" + DateTimeOffset.UtcNow.ToUnixTimeMilliseconds() };
             profile.Link = link;
-            profile.Name = string.IsNullOrWhiteSpace(nameBox.Text) ? BuildProfileName(config) : nameBox.Text.Trim();
-            profile.Carrier = config.Carrier;
-            profile.Transport = config.Transport;
+            if (XrayProfileParser.IsXray(link))
+            {
+                var xrayProfile = XrayProfileParser.Parse(link, AppInfo.DefaultSocksPort);
+                profile.Name = string.IsNullOrWhiteSpace(nameBox.Text) ? BuildXrayProfileName(xrayProfile) : nameBox.Text.Trim();
+                profile.Carrier = "xray";
+                profile.Transport = xrayProfile.Protocol;
+            }
+            else
+            {
+                var config = OlcUriParser.Parse(link);
+                profile.Name = string.IsNullOrWhiteSpace(nameBox.Text) ? BuildProfileName(config) : nameBox.Text.Trim();
+                profile.Carrier = config.Carrier;
+                profile.Transport = config.Transport;
+            }
 
             if (selected == null) profiles.Add(profile);
             profileStore.Save(profiles);
@@ -279,11 +299,12 @@ internal sealed class MainForm : Form
 
     private async Task ToggleConnectionAsync()
     {
-        if (core.IsRunning)
+        if (core.IsRunning || xray.IsRunning)
         {
             tunnel.Stop();
             proxy.Restore();
             core.Stop();
+            xray.Stop();
             connectButton.Text = "Connect";
             SetStatus("Disconnected");
             return;
@@ -291,18 +312,31 @@ internal sealed class MainForm : Form
 
         try
         {
-            var config = OlcUriParser.Parse(linkBox.Text.Trim());
+            var link = linkBox.Text.Trim();
+            var isXray = XrayProfileParser.IsXray(link);
+            var config = isXray ? null : OlcUriParser.Parse(link);
+            var xrayProfile = isXray ? XrayProfileParser.Parse(link, AppInfo.DefaultSocksPort) : null;
             SaveProfile();
             connectButton.Enabled = false;
-            SetStatus("Starting olcRTC core...");
-            core.Start(config, AppInfo.DefaultSocksPort);
+            SetStatus(isXray ? "Starting Xray core..." : "Starting olcRTC core...");
+            if (isXray)
+            {
+                xray.Start(xrayProfile!, AppInfo.DefaultSocksPort);
+            }
+            else
+            {
+                core.Start(config!, AppInfo.DefaultSocksPort);
+            }
             connectButton.Text = "Stop";
 
             using var cts = new CancellationTokenSource(TimeSpan.FromSeconds(48));
-            var ready = await core.WaitForSocksAsync(AppInfo.DefaultSocksPort, TimeSpan.FromSeconds(45), cts.Token);
+            var ready = isXray
+                ? await xray.WaitForSocksAsync(AppInfo.DefaultSocksPort, TimeSpan.FromSeconds(45), cts.Token)
+                : await core.WaitForSocksAsync(AppInfo.DefaultSocksPort, TimeSpan.FromSeconds(45), cts.Token);
             if (!ready)
             {
-                SetStatus(core.IsRunning
+                var running = isXray ? xray.IsRunning : core.IsRunning;
+                SetStatus(running
                     ? "Core is still starting. SOCKS is not ready yet."
                     : "Core stopped before SOCKS became ready.");
                 return;
@@ -316,7 +350,7 @@ internal sealed class MainForm : Form
             }
             else if (routeModeBox.SelectedIndex == 2)
             {
-                tunnel.Start(AppInfo.DefaultSocksPort, ResolveMtu(config));
+                tunnel.Start(AppInfo.DefaultSocksPort, isXray ? 1500 : ResolveMtu(config!));
                 SetStatus("Connected. Full tunnel is enabled.");
             }
         }
@@ -325,6 +359,7 @@ internal sealed class MainForm : Form
             tunnel.Stop();
             proxy.Restore();
             core.Stop();
+            xray.Stop();
             connectButton.Text = "Connect";
             SetStatus("Connection error: " + ex.Message);
         }
@@ -378,6 +413,15 @@ internal sealed class MainForm : Form
             : $"{config.Carrier} | {config.Transport} | {config.ClientId}";
     }
 
+    private static string BuildXrayProfileName(XrayProfile profile)
+    {
+        if (!string.IsNullOrWhiteSpace(profile.DisplayName) && !profile.DisplayName.Equals("Xray JSON", StringComparison.OrdinalIgnoreCase))
+        {
+            return profile.DisplayName.Trim();
+        }
+        return $"Xray | {profile.Protocol}";
+    }
+
     private void SetStatus(string text)
     {
         statusLabel.Text = text;
@@ -405,6 +449,21 @@ internal sealed class MainForm : Form
         else if (lower.Contains("ice connection state changed: connected") || lower.Contains("peer connection state changed: connected"))
         {
             statusLabel.Text = "Carrier connected. Waiting for tunnel handshake...";
+        }
+    }
+
+    private void HandleXrayLogLine(string line)
+    {
+        if (string.IsNullOrWhiteSpace(line)) return;
+        AppendLog("[xray] " + line);
+        var lower = line.ToLowerInvariant();
+        if (lower.Contains("started") || lower.Contains("xray"))
+        {
+            statusLabel.Text = "Xray core is running. Waiting for local SOCKS...";
+        }
+        if (lower.Contains("failed") || lower.Contains("panic") || lower.Contains("error"))
+        {
+            statusLabel.Text = "Xray error. Check profile/config.";
         }
     }
 

@@ -1,13 +1,32 @@
 # Changelog
 
+## XLTD VPN 0.0.3-alpha
+
+- Updated bundled MTS Link core to `l1ch666/mtsRTC` `ca04cc2`.
+- Reduced MTS Link `seichannel` smux frame size to small SEI bursts so page loads do not starve control ping/pong.
+- Relaxed default MTS Link `seichannel` liveness to `20s` interval, `60s` timeout, and `3` failures.
+- Limited MTS Link `seichannel` clients to three concurrent SOCKS tunnels to keep browser preconnect storms from collapsing the media channel.
+- Reconnect handshakes now use the normal handshake timeout instead of a 2s shortcut, reducing false reconnect churn on slow visual media.
+
+## XLTD VPN 0.0.2-alpha
+
+- Added an isolated Xray backend branch for Android and Windows without replacing the existing olcRTC backend.
+- Added Xray profile parsing for `vless://`, `vmess://`, `trojan://`, `ss://`, `socks://`, `http-proxy://`, `xray://` encoded JSON, and raw JSON configs.
+- Added stream-setting support for TLS, Reality, TCP, WebSocket, gRPC, HTTP/H2, XHTTP/SplitHTTP, KCP, and QUIC profile parameters.
+- Fixed Windows/Android Xray JSON runtime writes to strip BOM/zero-width prefixes and write UTF-8 without BOM, avoiding `invalid character 'ГЇ'` startup failures.
+- Android now bundles an official native Xray-core asset and runs it through the existing full-VPN tun2socks path.
+- Windows now packages `xray.exe`, `geoip.dat`, and `geosite.dat`, and can start Xray profiles through the same local SOCKS/proxy/full-tunnel UI.
+- Build scripts pin Xray-core to `v26.5.9` and produce `0.0.2-alpha` artifacts for both platforms.
+
 ## 1.9.4-universal-carrier
 
-- Raised the MTS Link traffic payload floor dynamically to `frag * 8` instead of keeping the old 1200-byte profile cap that could terminate the control stream at 1208-byte frames.
-- Older saved MTS Link profiles with `traffic-max-payload=1200` are auto-raised by the Android bridge.
+- Fixed MTS Link `seichannel` smux sizing to include the smux frame header plus crypto overhead, preventing frames like `1208 > 1200` from killing the control stream.
+- Removed the default MTS Link `traffic` throttle from Android runtime options; `traffic-max-payload` and delay values are now opt-in diagnostics.
+- Android defaults MTS Link `seichannel` full-VPN startup to two parallel TCP dials, reducing bursts without serializing every page load.
 
 ## Windows 0.5.4-beta
 
-- Applied the same dynamic MTS Link traffic payload floor to generated Windows core configs.
+- Removed the default generated MTS Link `traffic` throttle from Windows core configs so high-FPS/high-batch SEI profiles use the transport's real fragment capacity.
 - Full tunnel now routes selected DNS server host routes outside the TUN adapter and uses short UDP sessions to reduce UDP-over-SOCKS5 failure storms.
 
 ## 1.9.3-universal-carrier
