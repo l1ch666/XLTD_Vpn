@@ -33,8 +33,10 @@ Both Android and Windows build helpers use `l1ch666/mtsRTC`
 
 ## Versioning
 
-- Bump `versionCode` for every user-visible or behavioral improvement.
-- Bump `versionName` with the same intent, for example `1.9.4-universal-carrier`.
+- Bump `versionCode` for every user-visible or behavioral improvement on
+  Android.
+- Bump `versionName` with the same intent, for example
+  `1.9.5-universal-carrier`.
 - Add a short entry to `CHANGELOG.md` before publishing.
 - Keep Windows versioning separate under `windows/XLTD.Vpn.Windows`:
   - Android stable line: `1.9.x-universal-carrier`.
@@ -50,7 +52,9 @@ Build the Windows GUI and bundled core:
 powershell -ExecutionPolicy Bypass -File scripts/build_windows.ps1
 ```
 
-The helper writes `dist/windows/XLTD_Vpn-Windows-0.5.4-beta-win-x64.zip` and prints SHA256 for the GitHub pre-release.
+The helper writes the current Windows beta package under `dist/windows/` and
+prints SHA256 for the GitHub pre-release. For this stable line the expected
+package name is `XLTD_Vpn-Windows-0.5.4-beta-win-x64.zip`.
 
 ## GitHub publishing
 
@@ -65,3 +69,19 @@ Before publishing:
 5. Upload Android APKs to stable Android tags such as `v1.9.4`.
 6. Upload Windows beta zips to pre-release Windows tags such as `windows-v0.5.4-beta`.
 7. Include the SHA256 printed by each build helper in the release notes.
+
+## Cleanup Rules
+
+Safe to delete:
+
+- `.tmp/` parser-test scratch output.
+- root-level ignored binaries in `.external/olcrtc/`, for example
+  `.external/olcrtc/olcrtc.exe`.
+- regenerated packages under `dist/` when a fresh release build will recreate
+  them.
+
+Keep unless intentionally refreshing the toolchain:
+
+- `.external/olcrtc/` source checkout/cache.
+- `.external/ffmpeg*` downloaded runtime assets.
+- generated `app/libs/*.aar` only when you are about to rebuild the combo AAR.

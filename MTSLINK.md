@@ -1,9 +1,18 @@
-# MTS Link carrier
+# MTS Link Carrier
 
-This repo carries a local olcRTC fork patch for an experimental `mtslink`
-carrier. It joins a public MTS Link room as a guest and uses H.264 media.
-For VPN traffic the recommended transport is `seichannel`, because it carries
-data in H.264 SEI payloads without requiring QR video decoding.
+`XLTD VPN` stable builds use the `l1ch666/mtsRTC` `mtslink-universal-carrier`
+fork for the experimental `mtslink` carrier. It joins a public MTS Link room as
+a guest, negotiates H.264/Opus media, and carries VPN traffic through
+`seichannel` H.264 SEI payloads.
+
+Recommended VPN mode:
+
+```text
+mtslink + seichannel
+```
+
+`videochannel` remains available for legacy visible-video diagnostics, but it
+is not the default MTS Link VPN path.
 
 ## Room link
 
@@ -20,7 +29,7 @@ the expanded URL with `/stream-new/<sessionId>`:
 https://my.mts-link.ru/j/167846474/19645959806/stream-new/18867526566
 ```
 
-## Server config
+## Server Config
 
 Create `server-mtslink.yaml`:
 
@@ -71,9 +80,9 @@ For MTS Link, keep `traffic.max_payload_size` at least `fragment_size * 8`.
 The Windows and Android clients auto-raise older saved `traffic-max-payload=1200`
 profiles to that floor, so larger SEI frames do not hit the old artificial cap.
 
-Windows `0.5.4-beta` bundles `ffmpeg.exe`, `wintun.dll`, and the updated
-local core. Android `1.9.4-universal-carrier` can run media transports when the
-combo AAR is built with the Android ffmpeg asset or the profile supplies
+Windows `0.5.4-beta` bundles `ffmpeg.exe`, `wintun.dll`, and the updated local
+core. Android `1.9.4-universal-carrier` can run media transports when the combo
+AAR is built with the Android ffmpeg asset or the profile supplies
 `android-ffmpeg=<path>`.
 
 `1.9.4` / `0.5.4-beta` build the core from the patched `l1ch666/mtsRTC`
@@ -83,7 +92,7 @@ targets the case where MTS joined successfully, SOCKS became ready, and then
 the control stream died with `seichannel ack timeout` or missed pongs under
 traffic bursts.
 
-## MTS Link diagnostics
+## MTS Link Diagnostics
 
 The Windows client passes these optional URI parameters into the local core as
 environment variables:
