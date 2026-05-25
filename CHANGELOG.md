@@ -1,5 +1,16 @@
 # Changelog
 
+## Unreleased
+
+- Added MTS Link `seichannel` multipath profiles: clients can pass `mc-lanes`,
+  `mc-control-lanes`, `mc-connect-parallel`, `mc-min-ready`, and
+  `mc-max-streams-per-lane` so Windows, Android, and the server use the same
+  lane pool.
+- Added a v2 SEI lane header in the `mtsRTC` core. Legacy single-lane links
+  remain on the old frame format; multipath lanes filter by lane id.
+- Updated MTS Link docs and examples to recommend 12 lanes, one reserved
+  control lane, and matching traffic/liveness defaults.
+
 ## 1.9.4-universal-carrier
 
 - Raised the MTS Link traffic payload floor dynamically to `frag * 8` instead of keeping the old 1200-byte profile cap that could terminate the control stream at 1208-byte frames.

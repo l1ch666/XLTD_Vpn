@@ -222,6 +222,7 @@ import (
 	"github.com/openlibrecommunity/olcrtc/internal/control"
 	"github.com/openlibrecommunity/olcrtc/internal/logger"
 	"github.com/openlibrecommunity/olcrtc/internal/protect"
+	"github.com/openlibrecommunity/olcrtc/internal/runtime"
 	"github.com/openlibrecommunity/olcrtc/internal/transport"
 	"github.com/openlibrecommunity/olcrtc/internal/transport/seichannel"
 	"github.com/openlibrecommunity/olcrtc/internal/transport/videochannel"
@@ -316,6 +317,8 @@ type mobileConfig struct {
 	trafficMaxPayload int
 	trafficMinDelayMS int
 	trafficMaxDelayMS int
+
+	multipath runtime.MultipathConfig
 }
 
 var (
@@ -821,6 +824,19 @@ func SetTrafficOptions(maxPayload, minDelayMS, maxDelayMS int) {
 	defaults.trafficMaxDelayMS = clampNonNegative(maxDelayMS, 60000)
 }
 
+func SetMultipathOptions(lanes, controlLanes, connectParallelism, minReady, maxStreamsPerLane int) {
+	runtimeMu.Lock()
+	defer runtimeMu.Unlock()
+	ensureDefaultConfigLocked()
+	defaults.multipath = runtime.MultipathConfig{
+		Lanes:              lanes,
+		ControlLanes:       controlLanes,
+		ConnectParallelism: connectParallelism,
+		MinReady:           minReady,
+		MaxStreamsPerLane:  maxStreamsPerLane,
+	}.WithDefaults()
+}
+
 func SetDebug(enabled bool) {
 	logger.SetVerbose(enabled)
 	if enabled {
@@ -874,6 +890,7 @@ func mobileClientConfig(
 		Token:            cfg.token,
 		Liveness:         mobileLivenessConfig(cfg),
 		Traffic:          mobileTrafficConfig(cfg),
+		Multipath:        cfg.multipath,
 	}
 }
 

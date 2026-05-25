@@ -8,11 +8,16 @@ a guest, negotiates H.264/Opus media, and carries VPN traffic through
 Recommended VPN mode:
 
 ```text
-mtslink + seichannel
+mtslink + seichannel + multipath
 ```
 
 `videochannel` remains available for legacy visible-video diagnostics, but it
 is not the default MTS Link VPN path.
+
+Browser traffic needs more than one visual stream. The new MTS profile uses
+10-16 independent SEI lanes in the same room; each lane has its own guest bot
+and v2 lane id in the H.264 SEI header. Leave `mc-lanes` unset only when you
+need legacy single-lane compatibility.
 
 ## Room link
 
@@ -58,6 +63,12 @@ traffic:
   max_payload_size: 5600
   min_delay: 4ms
   max_delay: 18ms
+multipath:
+  lanes: 12
+  control_lanes: 1
+  connect_parallelism: 2
+  min_ready: 4
+  max_streams_per_lane: 3
 ffmpeg: "ffmpeg"
 debug: false
 ```
@@ -73,12 +84,20 @@ Run:
 The matching client profile URI is:
 
 ```text
-olcrtc://mtslink?seichannel<fps=30&batch=8&frag=700&ack-ms=10000&liveness-interval=20s&liveness-timeout=15s&liveness-failures=6&traffic-max-payload=5600&traffic-min-delay=4ms&traffic-max-delay=18ms&mts-peer-update=1&mts-silent-audio=1&mts-force-video=1>@https%3A%2F%2Fmy.mts-link.ru%2Fj%2F167846474%2F19645959806#64_hex_key_here$MTS%20Link
+olcrtc://mtslink?seichannel<fps=30&batch=8&frag=700&ack-ms=10000&liveness-interval=20s&liveness-timeout=15s&liveness-failures=6&traffic-max-payload=5600&traffic-min-delay=4ms&traffic-max-delay=18ms&mc-lanes=12&mc-control-lanes=1&mc-connect-parallel=2&mc-min-ready=4&mc-max-streams-per-lane=3&mts-peer-update=1&mts-silent-audio=1&mts-force-video=1>@https%3A%2F%2Fmy.mts-link.ru%2Fj%2F167846474%2F19645959806#64_hex_key_here$MTS%20Link
 ```
 
 For MTS Link, keep `traffic.max_payload_size` at least `fragment_size * 8`.
 The Windows and Android clients auto-raise older saved `traffic-max-payload=1200`
 profiles to that floor, so larger SEI frames do not hit the old artificial cap.
+
+Multipath URI keys:
+
+- `mc-lanes`: total lanes, recommended `12`, use `16` for wider lab profiles.
+- `mc-control-lanes`: reserved control lanes, recommended `1`.
+- `mc-connect-parallel`: parallel room joins, recommended `2` or `3`.
+- `mc-min-ready`: minimum lanes before SOCKS starts, recommended `4` for 12 lanes.
+- `mc-max-streams-per-lane`: soft stream cap per data lane, recommended `3`.
 
 Windows `0.5.4-beta` bundles `ffmpeg.exe`, `wintun.dll`, and the updated local
 core. Android `1.9.4-universal-carrier` can run media transports when the combo

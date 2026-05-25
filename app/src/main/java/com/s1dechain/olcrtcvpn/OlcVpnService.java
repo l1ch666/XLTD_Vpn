@@ -579,7 +579,9 @@ public final class OlcVpnService extends VpnService {
             return config.transport + " <vp8-fps=" + vp8Fps(config) + ", vp8-batch=" + vp8Batch(config) + ">";
         }
         if (isSei(config)) {
-            return config.transport + " <fps=" + seiFps(config) + ", batch=" + seiBatch(config) + ", frag=" + seiFrag(config) + ", ack-ms=" + seiAckMs(config) + ">";
+            int lanes = config.intParam("mc-lanes", config.intParam("sei-lanes", config.intParam("lanes", 1)));
+            String laneLabel = lanes > 1 ? ", lanes=" + lanes : "";
+            return config.transport + " <fps=" + seiFps(config) + ", batch=" + seiBatch(config) + ", frag=" + seiFrag(config) + ", ack-ms=" + seiAckMs(config) + laneLabel + ">";
         }
         if (isVideo(config)) {
             boolean isMtsLink = "mtslink".equalsIgnoreCase(config.carrier);

@@ -310,6 +310,17 @@ public final class OlcMobileBridge {
         int minDelayMs = durationParam(config, 4, "traffic-min-delay");
         int maxDelayMs = durationParam(config, 18, "traffic-max-delay");
         setTrafficOptionsIfAvailable(maxPayload, minDelayMs, maxDelayMs);
+
+        if (OlcUriParser.TRANSPORT_SEI.equalsIgnoreCase(config.transport)) {
+            int lanes = config.intParam("mc-lanes", config.intParam("sei-lanes", config.intParam("lanes", 1)));
+            if (lanes > 1) {
+                int controlLanes = config.intParam("mc-control-lanes", 1);
+                int parallel = config.intParam("mc-connect-parallel", config.intParam("mc-connect-parallelism", 2));
+                int minReady = config.intParam("mc-min-ready", Math.min(4, lanes));
+                int maxStreams = config.intParam("mc-max-streams-per-lane", 3);
+                setMultipathOptionsIfAvailable(lanes, controlLanes, parallel, minReady, maxStreams);
+            }
+        }
     }
 
     private int mtsLinkPayloadFloor(OlcConfig config) {
@@ -381,6 +392,32 @@ public final class OlcMobileBridge {
                 );
             } catch (NoSuchMethodException ignored) {
                 // Older AARs fall back to core defaults.
+            }
+        }
+    }
+
+    private void setMultipathOptionsIfAvailable(
+            int lanes,
+            int controlLanes,
+            int connectParallelism,
+            int minReady,
+            int maxStreamsPerLane
+    ) throws Exception {
+        try {
+            callVoid(
+                    new String[]{"SetMultipathOptions", "setMultipathOptions"},
+                    new Class<?>[]{int.class, int.class, int.class, int.class, int.class},
+                    lanes, controlLanes, connectParallelism, minReady, maxStreamsPerLane
+            );
+        } catch (NoSuchMethodException first) {
+            try {
+                callVoid(
+                        new String[]{"SetMultipathOptions", "setMultipathOptions"},
+                        new Class<?>[]{long.class, long.class, long.class, long.class, long.class},
+                        (long) lanes, (long) controlLanes, (long) connectParallelism, (long) minReady, (long) maxStreamsPerLane
+                );
+            } catch (NoSuchMethodException ignored) {
+                // Older AARs fall back to single-lane seichannel.
             }
         }
     }

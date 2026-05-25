@@ -45,7 +45,7 @@ Practical defaults:
 
 - `jitsi + datachannel` is the fastest ordinary olcRTC path.
 - `telemost + vp8channel` is the main stable Telemost path.
-- `mtslink + seichannel` is the recommended MTS Link VPN path.
+- `mtslink + seichannel + multipath` is the recommended MTS Link VPN path.
 - `videochannel` remains available for diagnostics and legacy visual transport
   profiles when an ffmpeg-backed core is bundled.
 
@@ -63,8 +63,10 @@ branch: mtslink-universal-carrier
 
 MTS Link joins a public room as a guest and negotiates the H.264/Opus media
 shape expected by the service. Normal VPN traffic should use `seichannel`,
-which carries data in H.264 SEI payloads. `videochannel` is kept for
-diagnostics and legacy visible-video tests.
+which carries data in H.264 SEI payloads. Browser traffic should use
+`mc-lanes=12` or a similar 10-16 lane profile so the client can spread SOCKS
+streams across several independent MTS Link guest bots. `videochannel` is kept
+for diagnostics and legacy visible-video tests.
 
 See [MTSLINK.md](MTSLINK.md) for the server YAML, URI examples, and diagnostics.
 

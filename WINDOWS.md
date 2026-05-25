@@ -15,7 +15,7 @@ The current Windows beta keeps the conservative local SOCKS/proxy path and adds 
 - Optional Windows user proxy mode while connected. It stores the previous proxy settings and restores them on stop/exit.
 - Experimental full tunnel mode through bundled `tun2socks.exe` and `wintun.dll`. This mode requires launching the app as Administrator.
 - Bundled `ffmpeg.exe` for `videochannel` profiles.
-- Experimental `mtslink` carrier profiles over H.264 media (`seichannel` for VPN traffic, `videochannel` for diagnostics).
+- Experimental `mtslink` carrier profiles over H.264 media (`seichannel` with optional `mc-lanes` multipath for VPN traffic, `videochannel` for diagnostics).
 
 The beta does not install a permanent Windows service. Full tunnel route/DNS setup is applied at connect time and rolled back at stop/exit. If a carrier reconnect loops through the tunnel on a specific network, switch back to local SOCKS or user proxy mode for that profile until the next tunnel hardening pass.
 

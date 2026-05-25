@@ -274,7 +274,7 @@ public final class MainActivity extends Activity {
         linkInput.setMinLines(5);
         linkInput.setGravity(Gravity.TOP | Gravity.START);
         linkInput.setInputType(InputType.TYPE_CLASS_TEXT | InputType.TYPE_TEXT_FLAG_MULTI_LINE | InputType.TYPE_TEXT_FLAG_NO_SUGGESTIONS);
-        linkInput.setHint("olcrtc://wbstream?datachannel@room#64hex...%default$direct\nили MTS Link: olcrtc://mtslink?seichannel<fps=30&batch=8&frag=700>@https%3A%2F%2Fmy.mts-link.ru%2Fj%2F...#key$profile");
+        linkInput.setHint("olcrtc://wbstream?datachannel@room#64hex...%default$direct\nили MTS Link: olcrtc://mtslink?seichannel<fps=30&batch=8&frag=700&mc-lanes=12>@https%3A%2F%2Fmy.mts-link.ru%2Fj%2F...#key$profile");
         linkInput.setTextColor(Color.parseColor("#111111"));
         linkInput.setHintTextColor(Color.parseColor("#A0A5AE"));
         linkInput.setTextSize(TypedValue.COMPLEX_UNIT_SP, 14);

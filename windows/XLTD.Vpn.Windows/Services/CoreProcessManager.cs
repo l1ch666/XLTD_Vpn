@@ -156,6 +156,7 @@ internal sealed class CoreProcessManager : IDisposable
         sb.AppendLine($"  timeout: {Yaml(config.Param("liveness-timeout", isMtsLink ? "15s" : "5s"))}");
         sb.AppendLine($"  failures: {config.IntParam("liveness-failures", isMtsLink ? 6 : 3)}");
         AppendTrafficOptions(sb, config, isMtsLink);
+        AppendMultipathOptions(sb, config, isMtsLink);
         AppendTransportOptions(sb, config);
         if (config.Transport == OlcUriParser.TransportVideo)
         {
@@ -254,6 +255,27 @@ internal sealed class CoreProcessManager : IDisposable
         {
             sb.AppendLine($"  max_delay: {Yaml(maxDelay)}");
         }
+    }
+
+    private static void AppendMultipathOptions(StringBuilder sb, OlcConfig config, bool isMtsLink)
+    {
+        if (!isMtsLink || config.Transport != OlcUriParser.TransportSei)
+        {
+            return;
+        }
+
+        var lanes = config.IntParam("mc-lanes", config.IntParam("sei-lanes", config.IntParam("lanes", 1)));
+        if (lanes <= 1)
+        {
+            return;
+        }
+
+        sb.AppendLine("multipath:");
+        sb.AppendLine($"  lanes: {lanes}");
+        sb.AppendLine($"  control_lanes: {config.IntParam("mc-control-lanes", 1)}");
+        sb.AppendLine($"  connect_parallelism: {config.IntParam("mc-connect-parallel", config.IntParam("mc-connect-parallelism", 2))}");
+        sb.AppendLine($"  min_ready: {config.IntParam("mc-min-ready", Math.Min(4, lanes))}");
+        sb.AppendLine($"  max_streams_per_lane: {config.IntParam("mc-max-streams-per-lane", 3)}");
     }
 
     private static int MtsLinkPayloadFloor(OlcConfig config)
