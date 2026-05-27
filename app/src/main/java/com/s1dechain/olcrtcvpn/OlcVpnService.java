@@ -11,6 +11,7 @@ import android.net.LinkProperties;
 import android.net.Network;
 import android.net.NetworkCapabilities;
 import android.net.NetworkRequest;
+import android.net.TrafficStats;
 import android.net.VpnService;
 import android.os.Build;
 import android.os.ParcelFileDescriptor;
@@ -30,6 +31,17 @@ public final class OlcVpnService extends VpnService {
     public static final String ACTION_STATUS = "com.s1dechain.olcrtcvpn.STATUS";
     public static final String EXTRA_LINK = "link";
     public static final String EXTRA_STATUS = "status";
+    public static final String EXTRA_STATE = "state";
+    public static final String EXTRA_CARRIER = "carrier";
+    public static final String EXTRA_TRANSPORT = "transport";
+    public static final String EXTRA_LANES = "lanes";
+    public static final String EXTRA_UPTIME_MS = "uptime_ms";
+    public static final String EXTRA_SESSION_RX_BYTES = "session_rx_bytes";
+    public static final String EXTRA_SESSION_TX_BYTES = "session_tx_bytes";
+    public static final String EXTRA_RX_BPS = "rx_bps";
+    public static final String EXTRA_TX_BPS = "tx_bps";
+    public static final String EXTRA_PROBE_LATENCY_MS = "probe_latency_ms";
+    public static final String EXTRA_EVENT = "event";
 
     private static final String TAG = "OlcVpnService";
     private static final String CHANNEL_ID = "olcrtc_vpn";
@@ -96,6 +108,18 @@ public final class OlcVpnService extends VpnService {
     private volatile int olcStormEvents = 0;
     private volatile int olcRemoteReadyEvents = 0;
     private volatile String activeNetworkSignature = "";
+    private volatile OlcConfig activeConfig;
+    private volatile long sessionStartedAtMs = 0L;
+    private volatile long trafficBaseRx = -1L;
+    private volatile long trafficBaseTx = -1L;
+    private volatile long trafficLastRx = -1L;
+    private volatile long trafficLastTx = -1L;
+    private volatile long trafficLastAtMs = 0L;
+    private volatile long sessionRxBytes = 0L;
+    private volatile long sessionTxBytes = 0L;
+    private volatile long rxBps = 0L;
+    private volatile long txBps = 0L;
+    private volatile long lastProbeLatencyMs = -1L;
 
     public static String getLastStatusSnapshot() {
         return lastStatusSnapshot;
@@ -113,6 +137,9 @@ public final class OlcVpnService extends VpnService {
             currentLink = null;
             sendStatus("Отключаюсь...");
             shutdownResources();
+            synchronized (lock) {
+                resetSessionTelemetryLocked();
+            }
             sendStatus("Отключено.");
             stopSelf();
             return START_NOT_STICKY;
@@ -133,19 +160,26 @@ public final class OlcVpnService extends VpnService {
 
     private void startWorker(String link) {
         synchronized (lock) {
-            restartRequested = false;
-            keepAliveFailures = 0;
-            int generation = ++workerGeneration;
-            shutdownResources();
-            worker = new Thread(() -> runVpnOnce(link, generation), "olcrtc-vpn-worker");
-            worker.start();
+            startWorkerLocked(link);
         }
+    }
+
+    private void startWorkerLocked(String link) {
+        restartRequested = false;
+        keepAliveFailures = 0;
+        int generation = ++workerGeneration;
+        resetSessionTelemetryLocked();
+        shutdownResourcesLocked();
+        worker = new Thread(() -> runVpnOnce(link, generation), "olcrtc-vpn-worker");
+        worker.start();
     }
 
     private void runVpnOnce(String link, int generation) {
         try {
             if (link == null || link.trim().isEmpty()) throw new IllegalArgumentException("empty olcrtc link");
             OlcConfig config = OlcUriParser.parse(link);
+            activeConfig = config;
+            sessionStartedAtMs = System.currentTimeMillis();
             int tunnelMtu = mtuForTransport(config);
             Log.i(TAG, "Parsed config: " + config.pretty());
             sendStatus("Ссылка разобрана: " + config.carrier + " / " + transportLabel(config) + " / MTU " + tunnelMtu);
@@ -264,6 +298,7 @@ public final class OlcVpnService extends VpnService {
                     lastKeepAliveAt = now;
                     if (runLocalSocksHandshakeProbe(LOCAL_SOCKS_PROBE_TIMEOUT_MS)) {
                         keepAliveFailures = 0;
+                        startForegroundCompat(notificationSpeedText());
                     } else {
                         keepAliveFailures++;
                         Log.w(TAG, "keepalive failed " + keepAliveFailures + "/" + KEEPALIVE_MAX_FAILURES);
@@ -298,11 +333,14 @@ public final class OlcVpnService extends VpnService {
         sendStatus("Автопереподключение через " + (delayMs / 1000) + " сек. Попытка #" + reconnectAttempt);
         new Thread(() -> {
             try { Thread.sleep(delayMs); } catch (InterruptedException ignored) {}
-            if (!stopRequested
-                    && currentLink != null
-                    && !controlledReconnectPending
-                    && workerGeneration == scheduledGeneration) {
-                startWorker(currentLink);
+            synchronized (lock) {
+                if (!stopRequested
+                        && currentLink != null
+                        && !currentLink.trim().isEmpty()
+                        && !controlledReconnectPending
+                        && workerGeneration == scheduledGeneration) {
+                    startWorkerLocked(currentLink);
+                }
             }
         }, "olcrtc-reconnect-delay").start();
     }
@@ -491,7 +529,7 @@ public final class OlcVpnService extends VpnService {
 
     private String resolveLinkMode(OlcConfig config) {
         String fromParam = config == null ? null : config.param("link", null);
-        if (isKnownLinkMode(fromParam)) return fromParam.trim().toLowerCase();
+        if (fromParam != null && !fromParam.trim().isEmpty()) return fromParam.trim().toLowerCase();
 
         String comment = config == null ? null : config.comment;
         if (isKnownLinkMode(comment)) return comment.trim().toLowerCase();
@@ -548,8 +586,7 @@ public final class OlcVpnService extends VpnService {
     }
 
     private int seiFps(OlcConfig config) {
-        boolean isMtsLink = config != null && "mtslink".equalsIgnoreCase(config.carrier);
-        return config == null ? 60 : config.intParam("fps", config.intParam("sei-fps", isMtsLink ? 30 : 60));
+        return config == null ? 30 : config.intParam("fps", config.intParam("sei-fps", 30));
     }
 
     private int seiBatch(OlcConfig config) {
@@ -678,6 +715,7 @@ public final class OlcVpnService extends VpnService {
     }
 
     private boolean runLocalSocksHandshakeProbe(int timeoutMs) {
+        long startedAt = System.currentTimeMillis();
         Socket socket = null;
         try {
             socket = new Socket();
@@ -688,8 +726,11 @@ public final class OlcVpnService extends VpnService {
             out.write(new byte[]{0x05, 0x01, 0x00});
             out.flush();
             byte[] greeting = readExactly(in, 2);
-            return greeting[0] == 0x05 && greeting[1] == 0x00;
+            boolean ok = greeting[0] == 0x05 && greeting[1] == 0x00;
+            lastProbeLatencyMs = ok ? Math.max(0L, System.currentTimeMillis() - startedAt) : -1L;
+            return ok;
         } catch (Throwable t) {
+            lastProbeLatencyMs = -1L;
             Log.w(TAG, "local SOCKS probe failed", t);
             return false;
         } finally {
@@ -879,12 +920,90 @@ public final class OlcVpnService extends VpnService {
         if (value != null && !list.contains(value)) list.add(value);
     }
 
+    private long currentUidRxBytes() {
+        long value = TrafficStats.getUidRxBytes(getApplicationInfo().uid);
+        return value == TrafficStats.UNSUPPORTED ? -1L : value;
+    }
+
+    private long currentUidTxBytes() {
+        long value = TrafficStats.getUidTxBytes(getApplicationInfo().uid);
+        return value == TrafficStats.UNSUPPORTED ? -1L : value;
+    }
+
+    private void updateTelemetrySnapshot() {
+        long now = System.currentTimeMillis();
+        long rx = currentUidRxBytes();
+        long tx = currentUidTxBytes();
+        if (rx < 0 || tx < 0) return;
+
+        if (trafficBaseRx < 0 || trafficBaseTx < 0) {
+            trafficBaseRx = rx;
+            trafficBaseTx = tx;
+            trafficLastRx = rx;
+            trafficLastTx = tx;
+            trafficLastAtMs = now;
+            return;
+        }
+
+        sessionRxBytes = Math.max(0L, rx - trafficBaseRx);
+        sessionTxBytes = Math.max(0L, tx - trafficBaseTx);
+
+        if (trafficLastAtMs > 0 && now > trafficLastAtMs && trafficLastRx >= 0 && trafficLastTx >= 0) {
+            long elapsedMs = Math.max(1L, now - trafficLastAtMs);
+            rxBps = Math.max(0L, (rx - trafficLastRx) * 1000L / elapsedMs);
+            txBps = Math.max(0L, (tx - trafficLastTx) * 1000L / elapsedMs);
+        }
+        trafficLastRx = rx;
+        trafficLastTx = tx;
+        trafficLastAtMs = now;
+    }
+
+    private String telemetryState() {
+        if (stopRequested || (currentLink == null && activeConfig == null && !tunEstablished)) return "disconnected";
+        if (tunEstablished) return "connected";
+        if (restartRequested || controlledReconnectPending) return "reconnecting";
+        if (activeConfig != null || worker != null) return "connecting";
+        return "disconnected";
+    }
+
+    private int activeLaneCount(OlcConfig config) {
+        if (config == null) return 1;
+        if (!OlcUriParser.TRANSPORT_SEI.equalsIgnoreCase(config.transport)) return 1;
+        return Math.max(1, config.intParam("mc-lanes", config.intParam("sei-lanes", config.intParam("lanes", 1))));
+    }
+
+    private String notificationSpeedText() {
+        updateTelemetrySnapshot();
+        if (!tunEstablished) return telemetryState();
+        return "↓ " + formatRate(rxBps) + "  ↑ " + formatRate(txBps);
+    }
+
+    private String formatRate(long bps) {
+        double value = Math.max(0L, bps);
+        if (value >= 1024 * 1024) return String.format(java.util.Locale.US, "%.1f MB/s", value / 1024d / 1024d);
+        if (value >= 1024) return String.format(java.util.Locale.US, "%.0f KB/s", value / 1024d);
+        return Math.round(value) + " B/s";
+    }
+
     private void sendStatus(String status) {
+        updateTelemetrySnapshot();
         lastStatusSnapshot = status == null ? "" : status;
         Log.i(TAG, "STATUS: " + status);
         Intent intent = new Intent(ACTION_STATUS);
         intent.setPackage(getPackageName());
         intent.putExtra(EXTRA_STATUS, status);
+        intent.putExtra(EXTRA_EVENT, status);
+        intent.putExtra(EXTRA_STATE, telemetryState());
+        OlcConfig config = activeConfig;
+        intent.putExtra(EXTRA_CARRIER, config == null ? "" : config.carrier);
+        intent.putExtra(EXTRA_TRANSPORT, config == null ? "" : config.transport);
+        intent.putExtra(EXTRA_LANES, activeLaneCount(config));
+        intent.putExtra(EXTRA_UPTIME_MS, sessionStartedAtMs > 0 ? Math.max(0L, System.currentTimeMillis() - sessionStartedAtMs) : 0L);
+        intent.putExtra(EXTRA_SESSION_RX_BYTES, sessionRxBytes);
+        intent.putExtra(EXTRA_SESSION_TX_BYTES, sessionTxBytes);
+        intent.putExtra(EXTRA_RX_BPS, rxBps);
+        intent.putExtra(EXTRA_TX_BPS, txBps);
+        intent.putExtra(EXTRA_PROBE_LATENCY_MS, lastProbeLatencyMs);
         sendBroadcast(intent);
     }
 
@@ -918,7 +1037,13 @@ public final class OlcVpnService extends VpnService {
         startForeground(NOTIFICATION_ID, notification);
     }
 
-    private synchronized void shutdownResources() {
+    private void shutdownResources() {
+        synchronized (lock) {
+            shutdownResourcesLocked();
+        }
+    }
+
+    private void shutdownResourcesLocked() {
         tunEstablished = false;
         unregisterNetworkCallback();
         if (tun2socks != null) {
@@ -939,10 +1064,28 @@ public final class OlcVpnService extends VpnService {
         detachedTunFd = -1;
     }
 
+    private void resetSessionTelemetryLocked() {
+        activeConfig = null;
+        sessionStartedAtMs = 0L;
+        trafficBaseRx = currentUidRxBytes();
+        trafficBaseTx = currentUidTxBytes();
+        trafficLastRx = trafficBaseRx;
+        trafficLastTx = trafficBaseTx;
+        trafficLastAtMs = System.currentTimeMillis();
+        sessionRxBytes = 0L;
+        sessionTxBytes = 0L;
+        rxBps = 0L;
+        txBps = 0L;
+        lastProbeLatencyMs = -1L;
+    }
+
     @Override
     public void onDestroy() {
         stopRequested = true;
         shutdownResources();
+        synchronized (lock) {
+            resetSessionTelemetryLocked();
+        }
         sendStatus("Отключено.");
         super.onDestroy();
     }

@@ -7,8 +7,8 @@ Current stable line:
 
 | Platform | Version | Notes |
 | --- | --- | --- |
-| Android | `1.9.4-universal-carrier` | olcRTC universal-carrier client with MTS Link support. |
-| Windows | `0.5.4-beta` | Native Windows GUI with local SOCKS, user proxy, and experimental full tunnel. |
+| Android | `1.9.5-universal-carrier` | Dark runtime UI, live telemetry, MTS Link multipath profiles, and rebuilt combo core. |
+| Windows | `0.5.5-beta` | Native Windows GUI with local SOCKS, user proxy, experimental full tunnel, and refreshed bundled core. |
 
 The isolated Xray work lives on branch `alpha/xray-0.0.1` and is versioned as
 `0.0.x-alpha`. The stable `main` branch stays focused on olcRTC and MTS Link.
@@ -68,6 +68,10 @@ which carries data in H.264 SEI payloads. Browser traffic should use
 streams across several independent MTS Link guest bots. `videochannel` is kept
 for diagnostics and legacy visible-video tests.
 
+Android `1.9.5` adds the dark live dashboard from the redesign: status badge,
+session traffic counter, transport chips, metrics cards, profile cards, event
+log, and bottom navigation. The profile storage format is unchanged.
+
 See [MTSLINK.md](MTSLINK.md) for the server YAML, URI examples, and diagnostics.
 
 ## Build
@@ -98,7 +102,7 @@ powershell -ExecutionPolicy Bypass -File scripts/build_windows.ps1
 Output:
 
 ```text
-dist/windows/XLTD_Vpn-Windows-0.5.4-beta-win-x64.zip
+dist/windows/XLTD_Vpn-Windows-0.5.5-beta-win-x64.zip
 ```
 
 The Windows package includes:

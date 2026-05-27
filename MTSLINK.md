@@ -57,8 +57,8 @@ sei:
   ack_timeout_ms: 10000
 liveness:
   interval: 20s
-  timeout: 15s
-  failures: 6
+  timeout: 60s
+  failures: 3
 traffic:
   max_payload_size: 5600
   min_delay: 4ms
@@ -84,7 +84,7 @@ Run:
 The matching client profile URI is:
 
 ```text
-olcrtc://mtslink?seichannel<fps=30&batch=8&frag=700&ack-ms=10000&liveness-interval=20s&liveness-timeout=15s&liveness-failures=6&traffic-max-payload=5600&traffic-min-delay=4ms&traffic-max-delay=18ms&mc-lanes=12&mc-control-lanes=1&mc-connect-parallel=2&mc-min-ready=4&mc-max-streams-per-lane=3&mts-peer-update=1&mts-silent-audio=1&mts-force-video=1>@https%3A%2F%2Fmy.mts-link.ru%2Fj%2F167846474%2F19645959806#64_hex_key_here$MTS%20Link
+olcrtc://mtslink?seichannel<fps=30&batch=8&frag=700&ack-ms=10000&liveness-interval=20s&liveness-timeout=60s&liveness-failures=3&traffic-max-payload=5600&traffic-min-delay=4ms&traffic-max-delay=18ms&mc-lanes=12&mc-control-lanes=1&mc-connect-parallel=2&mc-min-ready=4&mc-max-streams-per-lane=3&mts-peer-update=1&mts-silent-audio=1&mts-force-video=1>@https%3A%2F%2Fmy.mts-link.ru%2Fj%2F167846474%2F19645959806#64_hex_key_here$MTS%20Link
 ```
 
 For MTS Link, keep `traffic.max_payload_size` at least `fragment_size * 8`.
@@ -99,17 +99,19 @@ Multipath URI keys:
 - `mc-min-ready`: minimum lanes before SOCKS starts, recommended `4` for 12 lanes.
 - `mc-max-streams-per-lane`: soft stream cap per data lane, recommended `3`.
 
-Windows `0.5.4-beta` bundles `ffmpeg.exe`, `wintun.dll`, and the updated local
-core. Android `1.9.4-universal-carrier` can run media transports when the combo
+Windows `0.5.5-beta` bundles `ffmpeg.exe`, `wintun.dll`, and the updated local
+core. Android `1.9.5-universal-carrier` can run media transports when the combo
 AAR is built with the Android ffmpeg asset or the profile supplies
 `android-ffmpeg=<path>`.
 
-`1.9.4` / `0.5.4-beta` build the core from the patched `l1ch666/mtsRTC`
-fork without rebasing onto newer upstream olcRTC. The fork switches
-`seichannel` to per-fragment ACKs. This
-targets the case where MTS joined successfully, SOCKS became ready, and then
-the control stream died with `seichannel ack timeout` or missed pongs under
-traffic bursts.
+`1.9.5` / `0.5.5-beta` build the core from the patched `l1ch666/mtsRTC`
+fork without rebasing onto newer upstream olcRTC. The fork keeps per-fragment
+ACKs, lets parallel `seichannel` sends progress while one lane waits for ACKs,
+closes remote track readers during reconnect, avoids duplicate MTS conference
+creation, and generates unique guest names instead of reusing one static bot
+name. This targets the case where MTS joined successfully, SOCKS became ready,
+and then the control stream died with `seichannel ack timeout`, missed pongs, or
+orphaned media readers under traffic bursts.
 
 ## MTS Link Diagnostics
 

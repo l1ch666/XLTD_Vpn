@@ -1163,10 +1163,10 @@ func applyCarrierRuntimeDefaults(carrierName string, cfg mobileConfig) mobileCon
 			cfg.livenessIntervalMS = 20000
 		}
 		if cfg.livenessTimeoutMS <= 0 {
-			cfg.livenessTimeoutMS = 15000
+			cfg.livenessTimeoutMS = 60000
 		}
 		if cfg.livenessFailures <= 0 {
-			cfg.livenessFailures = 6
+			cfg.livenessFailures = 3
 		}
 		payloadFloor := cfg.seiFragmentSize * 8
 		if payloadFloor < 1600 {

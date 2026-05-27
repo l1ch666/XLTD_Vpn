@@ -54,7 +54,7 @@ powershell -ExecutionPolicy Bypass -File scripts/build_windows.ps1
 
 The helper writes the current Windows beta package under `dist/windows/` and
 prints SHA256 for the GitHub pre-release. For this stable line the expected
-package name is `XLTD_Vpn-Windows-0.5.4-beta-win-x64.zip`.
+package name is `XLTD_Vpn-Windows-0.5.5-beta-win-x64.zip`.
 
 ## GitHub publishing
 
@@ -66,8 +66,8 @@ Before publishing:
 2. Commit only source, scripts, and documentation changes.
 3. Build the debug APK with `scripts/build_apk.ps1`.
 4. Build the Windows beta package with `scripts/build_windows.ps1` when a Windows change is included.
-5. Upload Android APKs to stable Android tags such as `v1.9.4`.
-6. Upload Windows beta zips to pre-release Windows tags such as `windows-v0.5.4-beta`.
+5. Upload Android APKs to stable Android tags such as `v1.9.5`.
+6. Upload Windows beta zips to pre-release Windows tags such as `windows-v0.5.5-beta`.
 7. Include the SHA256 printed by each build helper in the release notes.
 
 ## Cleanup Rules

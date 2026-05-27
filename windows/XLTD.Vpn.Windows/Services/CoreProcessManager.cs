@@ -153,8 +153,8 @@ internal sealed class CoreProcessManager : IDisposable
         sb.AppendLine($"  port: {socksPort}");
         sb.AppendLine("liveness:");
         sb.AppendLine($"  interval: {Yaml(config.Param("liveness-interval", isMtsLink ? "20s" : "10s"))}");
-        sb.AppendLine($"  timeout: {Yaml(config.Param("liveness-timeout", isMtsLink ? "15s" : "5s"))}");
-        sb.AppendLine($"  failures: {config.IntParam("liveness-failures", isMtsLink ? 6 : 3)}");
+        sb.AppendLine($"  timeout: {Yaml(config.Param("liveness-timeout", isMtsLink ? "60s" : "5s"))}");
+        sb.AppendLine($"  failures: {config.IntParam("liveness-failures", 3)}");
         AppendTrafficOptions(sb, config, isMtsLink);
         AppendMultipathOptions(sb, config, isMtsLink);
         AppendTransportOptions(sb, config);

@@ -12,8 +12,8 @@ android {
         // Target 28 keeps the foreground-service setup simple for a local MVP APK.
         // Raise it later when you add a production notification/FGS policy.
         targetSdk 28
-        versionCode 22
-        versionName '1.9.4-universal-carrier'
+        versionCode 23
+        versionName '1.9.5-universal-carrier'
     }
 
     sourceSets {

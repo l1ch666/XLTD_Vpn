@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+- No pending user-visible changes.
+
+## 1.9.5-universal-carrier
+
 - Added MTS Link `seichannel` multipath profiles: clients can pass `mc-lanes`,
   `mc-control-lanes`, `mc-connect-parallel`, `mc-min-ready`, and
   `mc-max-streams-per-lane` so Windows, Android, and the server use the same
@@ -10,6 +14,24 @@
   remain on the old frame format; multipath lanes filter by lane id.
 - Updated MTS Link docs and examples to recommend 12 lanes, one reserved
   control lane, and matching traffic/liveness defaults.
+- Replaced the Android main screen with the dark live runtime UI: status badge,
+  session traffic counter, transport chips, metrics grid, profile cards, event
+  log, and bottom navigation for home/profiles/traffic/settings.
+- Added Android service telemetry broadcasts for carrier, transport, lanes,
+  uptime, SOCKS probe latency, session bytes, current speed, and recent status
+  events.
+- Fixed Android MTS defaults to use `seichannel` 30 FPS by default, MTS
+  liveness timeout `60s` with `3` failures, a single shutdown/reconnect lock,
+  generation-guarded reconnects, and explicit `link=` pass-through to the Go
+  core.
+
+## Windows 0.5.5-beta
+
+- Bumped Windows package metadata and build output to `0.5.5-beta`.
+- Rebuilt the bundled core from the same `mtsRTC` branch used by Android
+  `1.9.5`.
+- Documented the 12-lane MTS Link profile and updated release maintenance notes
+  for the new package/tag names.
 
 ## 1.9.4-universal-carrier
 

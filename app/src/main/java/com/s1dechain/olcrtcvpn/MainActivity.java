@@ -28,7 +28,10 @@ import android.widget.ScrollView;
 import android.widget.TextView;
 
 import java.util.ArrayList;
+import java.util.LinkedHashMap;
 import java.util.List;
+import java.util.Locale;
+import java.util.Map;
 
 public final class MainActivity extends Activity {
     private static final int VPN_REQUEST_CODE = 1201;
@@ -37,35 +40,93 @@ public final class MainActivity extends Activity {
     private static final String KEY_PROFILE_IDS = "profile_ids";
     private static final String KEY_SELECTED_PROFILE_ID = "selected_profile_id";
 
+    private static final int TAB_HOME = 0;
+    private static final int TAB_PROFILES = 1;
+    private static final int TAB_TRAFFIC = 2;
+    private static final int TAB_SETTINGS = 3;
+
     private static final int STATE_DISCONNECTED = 0;
     private static final int STATE_CONNECTING = 1;
     private static final int STATE_CONNECTED = 2;
 
-    private EditText linkInput;
-    private EditText profileNameInput;
-    private LinearLayout editorCard;
-    private TextView editorTitle;
-    private TextView editorDeleteButton;
+    private LinearLayout content;
+    private LinearLayout bottomNav;
+    private TextView homeNav;
+    private TextView profilesNav;
+    private TextView trafficNav;
+    private TextView settingsNav;
+
+    private TextView statusBadge;
+    private TextView statusDot;
+    private TextView sessionAmount;
+    private TextView sessionUnit;
+    private TextView sessionSub;
+    private TextView toggleButton;
+    private LinearLayout chipBar;
+    private TextView rxValue;
+    private TextView txValue;
+    private TextView latencyValue;
+    private TextView uptimeValue;
+    private TextView rxDelta;
+    private TextView txDelta;
+    private LinearLayout profileCards;
+    private LinearLayout eventLog;
     private TextView statusView;
     private TextView detailsView;
-    private TextView stateChip;
-    private TextView heroSubtitle;
-    private TextView toggleButton;
-    private LinearLayout profilesList;
+
+    private EditText profileNameInput;
+    private EditText linkInput;
+    private LinearLayout editorHost;
+    private TextView editorTitle;
+    private TextView editorDeleteButton;
+
+    private EditText mtuInput;
+    private EditText fpsInput;
+    private EditText batchInput;
+    private EditText fragInput;
+    private EditText ackInput;
+    private EditText lanesInput;
+    private EditText liveTimeoutInput;
+    private EditText liveFailuresInput;
 
     private String pendingLink;
     private String selectedProfileId;
     private String editingProfileId;
+    private int activeTab = TAB_HOME;
     private int connectionState = STATE_DISCONNECTED;
     private boolean statusReceiverRegistered = false;
+
+    private String telemetryState = "disconnected";
+    private String telemetryCarrier = "";
+    private String telemetryTransport = "";
+    private int telemetryLanes = 1;
+    private long uptimeMs = 0L;
+    private long sessionRxBytes = 0L;
+    private long sessionTxBytes = 0L;
+    private long rxBps = 0L;
+    private long txBps = 0L;
+    private long probeLatencyMs = -1L;
+
+    private final List<String> recentEvents = new ArrayList<>();
 
     private final BroadcastReceiver statusReceiver = new BroadcastReceiver() {
         @Override
         public void onReceive(Context context, Intent intent) {
-            if (OlcVpnService.ACTION_STATUS.equals(intent.getAction())) {
-                String status = intent.getStringExtra(OlcVpnService.EXTRA_STATUS);
-                if (status != null) applyServiceStatus(status);
-            }
+            if (!OlcVpnService.ACTION_STATUS.equals(intent.getAction())) return;
+            String status = intent.getStringExtra(OlcVpnService.EXTRA_STATUS);
+            telemetryState = intent.getStringExtra(OlcVpnService.EXTRA_STATE);
+            if (telemetryState == null) telemetryState = "";
+            telemetryCarrier = safe(intent.getStringExtra(OlcVpnService.EXTRA_CARRIER));
+            telemetryTransport = safe(intent.getStringExtra(OlcVpnService.EXTRA_TRANSPORT));
+            telemetryLanes = Math.max(1, intent.getIntExtra(OlcVpnService.EXTRA_LANES, 1));
+            uptimeMs = intent.getLongExtra(OlcVpnService.EXTRA_UPTIME_MS, uptimeMs);
+            sessionRxBytes = intent.getLongExtra(OlcVpnService.EXTRA_SESSION_RX_BYTES, sessionRxBytes);
+            sessionTxBytes = intent.getLongExtra(OlcVpnService.EXTRA_SESSION_TX_BYTES, sessionTxBytes);
+            rxBps = intent.getLongExtra(OlcVpnService.EXTRA_RX_BPS, rxBps);
+            txBps = intent.getLongExtra(OlcVpnService.EXTRA_TX_BPS, txBps);
+            probeLatencyMs = intent.getLongExtra(OlcVpnService.EXTRA_PROBE_LATENCY_MS, probeLatencyMs);
+            if (status != null) applyServiceStatus(status);
+            refreshDynamicUi();
         }
     };
 
@@ -88,6 +149,7 @@ public final class MainActivity extends Activity {
     @Override
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
+        selectedProfileId = getSharedPreferences(PREFS, MODE_PRIVATE).getString(KEY_SELECTED_PROFILE_ID, "");
         buildUi();
         handleIncomingIntent(getIntent());
     }
@@ -98,13 +160,20 @@ public final class MainActivity extends Activity {
         registerStatusReceiver();
         String lastStatus = OlcVpnService.getLastStatusSnapshot();
         if (!TextUtils.isEmpty(lastStatus)) applyServiceStatus(lastStatus);
-        refreshProfilesList();
+        renderActiveTab();
     }
 
     @Override
     protected void onStop() {
         unregisterStatusReceiver();
         super.onStop();
+    }
+
+    @Override
+    protected void onNewIntent(Intent intent) {
+        super.onNewIntent(intent);
+        setIntent(intent);
+        handleIncomingIntent(intent);
     }
 
     private void registerStatusReceiver() {
@@ -128,284 +197,645 @@ public final class MainActivity extends Activity {
         }
     }
 
-    @Override
-    protected void onNewIntent(Intent intent) {
-        super.onNewIntent(intent);
-        setIntent(intent);
-        handleIncomingIntent(intent);
-    }
-
     private void buildUi() {
-        SharedPreferences prefs = getSharedPreferences(PREFS, MODE_PRIVATE);
-        selectedProfileId = prefs.getString(KEY_SELECTED_PROFILE_ID, "");
-
-        ScrollView scroll = new ScrollView(this);
-        scroll.setFillViewport(true);
-        scroll.setBackgroundColor(Color.parseColor("#F5F6F8"));
-
         LinearLayout root = new LinearLayout(this);
         root.setOrientation(LinearLayout.VERTICAL);
-        root.setPadding(dp(20), dp(20), dp(20), dp(24));
-        scroll.addView(root, new ScrollView.LayoutParams(
+        root.setBackgroundColor(Color.parseColor("#0D0D14"));
+
+        ScrollView scroll = new ScrollView(this);
+        scroll.setFillViewport(false);
+        content = new LinearLayout(this);
+        content.setOrientation(LinearLayout.VERTICAL);
+        content.setPadding(dp(18), dp(10), dp(18), dp(10));
+        scroll.addView(content, new ScrollView.LayoutParams(
+                ViewGroup.LayoutParams.MATCH_PARENT,
+                ViewGroup.LayoutParams.WRAP_CONTENT
+        ));
+        root.addView(scroll, new LinearLayout.LayoutParams(
+                ViewGroup.LayoutParams.MATCH_PARENT,
+                0,
+                1f
+        ));
+
+        bottomNav = new LinearLayout(this);
+        bottomNav.setOrientation(LinearLayout.HORIZONTAL);
+        bottomNav.setPadding(dp(10), dp(8), dp(10), dp(8));
+        bottomNav.setBackground(roundedDrawable("#101018", 0, "#1A1A24", 1));
+        root.addView(bottomNav, new LinearLayout.LayoutParams(
                 ViewGroup.LayoutParams.MATCH_PARENT,
                 ViewGroup.LayoutParams.WRAP_CONTENT
         ));
 
-        root.addView(buildHeroCard(), lpMatchWrap());
-        root.addView(buildProfilesCard(), lpMatchWrap());
-
-        editorCard = buildEditorCard();
-        editorCard.setVisibility(View.GONE);
-        root.addView(editorCard, lpMatchWrap());
-
-        root.addView(buildConnectionCard(), lpMatchWrap());
-        root.addView(buildDetailsCard(), lpMatchWrap());
-
-        setContentView(scroll);
+        setContentView(root);
+        renderBottomNav();
+        renderActiveTab();
 
         boolean comboReady = OlcMobileBridge.isAvailable() && Tun2SocksMobileBridge.isAvailable();
         setStatus(comboReady ? "Готов к подключению." : "Core не найден. Собери combo AAR и пересобери APK.");
-        applyConnectionState(STATE_DISCONNECTED, comboReady ? "Готов к подключению" : "Нужно собрать combo AAR");
-        refreshProfilesList();
+        applyConnectionState(STATE_DISCONNECTED, comboReady ? "Готов" : "Нет core");
     }
 
-    private LinearLayout buildHeroCard() {
-        LinearLayout heroCard = cardLayout();
-        heroCard.setPadding(dp(20), dp(20), dp(20), dp(20));
+    private void renderActiveTab() {
+        if (content == null) return;
+        content.removeAllViews();
+        editorHost = null;
+        profileCards = null;
+        eventLog = null;
+        statusView = null;
+        detailsView = null;
+        mtuInput = null;
+        fpsInput = null;
+        batchInput = null;
+        fragInput = null;
+        ackInput = null;
+        lanesInput = null;
+        liveTimeoutInput = null;
+        liveFailuresInput = null;
 
-        LinearLayout heroTop = new LinearLayout(this);
-        heroTop.setOrientation(LinearLayout.HORIZONTAL);
-        heroTop.setGravity(Gravity.CENTER_VERTICAL);
-
-        TextView logoBubble = new TextView(this);
-        logoBubble.setText("o");
-        logoBubble.setTextColor(Color.WHITE);
-        logoBubble.setTypeface(Typeface.DEFAULT_BOLD);
-        logoBubble.setTextSize(TypedValue.COMPLEX_UNIT_SP, 22);
-        logoBubble.setGravity(Gravity.CENTER);
-        logoBubble.setBackground(roundedDrawable("#111111", 18, null, 0));
-        heroTop.addView(logoBubble, squareLp(dp(44)));
-
-        LinearLayout heroTextWrap = new LinearLayout(this);
-        heroTextWrap.setOrientation(LinearLayout.VERTICAL);
-        LinearLayout.LayoutParams heroTextLp = new LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f);
-        heroTextLp.setMargins(dp(14), 0, 0, 0);
-
-        TextView title = new TextView(this);
-        title.setText("olcRTC VPN");
-        title.setTextColor(Color.parseColor("#111111"));
-        title.setTextSize(TypedValue.COMPLEX_UNIT_SP, 26);
-        title.setTypeface(Typeface.DEFAULT_BOLD);
-        heroTextWrap.addView(title, lpMatchWrap());
-
-        heroSubtitle = new TextView(this);
-        heroSubtitle.setText("Готов к подключению");
-        heroSubtitle.setTextColor(Color.parseColor("#6F737B"));
-        heroSubtitle.setTextSize(TypedValue.COMPLEX_UNIT_SP, 14);
-        heroTextWrap.addView(heroSubtitle, lpMatchWrapNoMargin());
-
-        heroTop.addView(heroTextWrap, heroTextLp);
-        heroCard.addView(heroTop, lpMatchWrapNoMargin());
-
-        TextView heroCaption = new TextView(this);
-        heroCaption.setText("Выбери профиль и подключайся одной кнопкой.");
-        heroCaption.setTextColor(Color.parseColor("#7A7F87"));
-        heroCaption.setTextSize(TypedValue.COMPLEX_UNIT_SP, 13);
-        heroCaption.setPadding(0, dp(16), 0, 0);
-        heroCard.addView(heroCaption, lpMatchWrapNoMargin());
-
-        return heroCard;
+        if (activeTab == TAB_HOME) {
+            buildHomeTab();
+        } else if (activeTab == TAB_PROFILES) {
+            buildProfilesTab();
+        } else if (activeTab == TAB_TRAFFIC) {
+            buildTrafficTab();
+        } else {
+            buildSettingsTab();
+        }
+        renderBottomNav();
+        refreshDynamicUi();
     }
 
-    private LinearLayout buildProfilesCard() {
-        LinearLayout profilesCard = cardLayout();
-        profilesCard.setPadding(dp(18), dp(18), dp(18), dp(18));
-
-        LinearLayout header = new LinearLayout(this);
-        header.setOrientation(LinearLayout.HORIZONTAL);
-        header.setGravity(Gravity.CENTER_VERTICAL);
-
-        TextView profilesTitle = sectionLabel("Configurations");
-        header.addView(profilesTitle, new LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f));
-
-        TextView addButton = smallRoundButton("+");
-        addButton.setOnClickListener(v -> openNewProfileEditor(""));
-        header.addView(addButton, squareLp(dp(36)));
-
-        profilesCard.addView(header, lpMatchWrapNoMargin());
-
-        profilesList = new LinearLayout(this);
-        profilesList.setOrientation(LinearLayout.VERTICAL);
-        profilesList.setPadding(0, dp(10), 0, 0);
-        profilesCard.addView(profilesList, lpMatchWrapNoMargin());
-
-        return profilesCard;
+    private void buildHomeTab() {
+        content.addView(buildStatusBar(), lpMatchWrapNoMargin());
+        content.addView(buildHero(), lpMatchWrapNoMargin());
+        content.addView(buildConnectButton(), lpMatchWrapNoMargin());
+        content.addView(buildTransportChips(), lpMatchWrapNoMargin());
+        content.addView(buildMetricsGrid(), lpMatchWrapNoMargin());
+        content.addView(buildProfilesPanel(false), lpMatchWrap());
+        content.addView(buildEventPanel(5), lpMatchWrap());
+        content.addView(buildStatusPanel(), lpMatchWrap());
     }
 
-    private LinearLayout buildEditorCard() {
-        LinearLayout card = cardLayout();
-        card.setPadding(dp(18), dp(18), dp(18), dp(18));
+    private void buildProfilesTab() {
+        content.addView(titleBlock("Профили", "Сохранённые olcRTC/MTS Link конфигурации"), lpMatchWrapNoMargin());
+        content.addView(buildProfilesPanel(true), lpMatchWrap());
+        editorHost = new LinearLayout(this);
+        editorHost.setOrientation(LinearLayout.VERTICAL);
+        content.addView(editorHost, lpMatchWrap());
+        openProfileEditor(getSelectedProfile(), false);
+    }
 
-        LinearLayout header = new LinearLayout(this);
-        header.setOrientation(LinearLayout.HORIZONTAL);
-        header.setGravity(Gravity.CENTER_VERTICAL);
+    private void buildTrafficTab() {
+        content.addView(titleBlock("Трафик", "Сессия, скорость, задержка и последние события"), lpMatchWrapNoMargin());
+        content.addView(buildMetricsGrid(), lpMatchWrapNoMargin());
+        content.addView(buildTrafficSummary(), lpMatchWrap());
+        content.addView(buildEventPanel(12), lpMatchWrap());
+    }
 
-        editorTitle = sectionLabel("Profile settings");
-        header.addView(editorTitle, new LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f));
+    private void buildSettingsTab() {
+        content.addView(titleBlock("Настройки", "Параметры выбранного профиля без смены формата хранения"), lpMatchWrapNoMargin());
+        content.addView(buildSettingsForm(), lpMatchWrap());
+    }
 
-        TextView close = smallRoundButton("×");
-        close.setOnClickListener(v -> closeProfileEditor());
-        header.addView(close, squareLp(dp(36)));
-        card.addView(header, lpMatchWrapNoMargin());
-
-        profileNameInput = new EditText(this);
-        profileNameInput.setSingleLine(true);
-        profileNameInput.setHint("Название профиля, можно пустым");
-        profileNameInput.setTextColor(Color.parseColor("#111111"));
-        profileNameInput.setHintTextColor(Color.parseColor("#A0A5AE"));
-        profileNameInput.setTextSize(TypedValue.COMPLEX_UNIT_SP, 14);
-        profileNameInput.setPadding(dp(16), dp(13), dp(16), dp(13));
-        profileNameInput.setBackground(roundedDrawable("#F5F6F8", 18, "#E7E9EE", 1));
-        profileNameInput.setCursorVisible(false);
-        profileNameInput.setOnFocusChangeListener((v, hasFocus) -> profileNameInput.setCursorVisible(hasFocus));
-        card.addView(profileNameInput, lpMatchWrap());
-
-        linkInput = new EditText(this);
-        linkInput.setMinLines(5);
-        linkInput.setGravity(Gravity.TOP | Gravity.START);
-        linkInput.setInputType(InputType.TYPE_CLASS_TEXT | InputType.TYPE_TEXT_FLAG_MULTI_LINE | InputType.TYPE_TEXT_FLAG_NO_SUGGESTIONS);
-        linkInput.setHint("olcrtc://wbstream?datachannel@room#64hex...%default$direct\nили MTS Link: olcrtc://mtslink?seichannel<fps=30&batch=8&frag=700&mc-lanes=12>@https%3A%2F%2Fmy.mts-link.ru%2Fj%2F...#key$profile");
-        linkInput.setTextColor(Color.parseColor("#111111"));
-        linkInput.setHintTextColor(Color.parseColor("#A0A5AE"));
-        linkInput.setTextSize(TypedValue.COMPLEX_UNIT_SP, 14);
-        linkInput.setPadding(dp(16), dp(16), dp(16), dp(16));
-        linkInput.setBackground(roundedDrawable("#F5F6F8", 18, "#E7E9EE", 1));
-        linkInput.setCursorVisible(false);
-        linkInput.setOnFocusChangeListener((v, hasFocus) -> linkInput.setCursorVisible(hasFocus));
-        card.addView(linkInput, lpMatchWrap());
-
+    private LinearLayout buildStatusBar() {
         LinearLayout row = new LinearLayout(this);
         row.setOrientation(LinearLayout.HORIZONTAL);
+        row.setGravity(Gravity.CENTER_VERTICAL);
+        row.setPadding(0, dp(4), 0, dp(8));
 
-        TextView save = actionButton("Сохранить");
-        save.setOnClickListener(v -> saveEditorProfile());
-        row.addView(save, rowTextButtonLp(1f));
+        TextView app = smallMono("XLTD VPN");
+        app.setTextColor(Color.parseColor("#55556A"));
+        row.addView(app, new LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f));
 
-        editorDeleteButton = actionButton("Удалить");
-        editorDeleteButton.setOnClickListener(v -> deleteEditingProfile());
-        row.addView(editorDeleteButton, rowTextButtonLp(0.55f));
+        TextView speed = smallMono("↓ " + formatRate(rxBps));
+        speed.setTextColor(Color.parseColor("#66667A"));
+        row.addView(speed, lpWrapWrapNoMargin());
+        return row;
+    }
 
-        card.addView(row, lpMatchWrapNoMargin());
+    private LinearLayout buildHero() {
+        LinearLayout hero = new LinearLayout(this);
+        hero.setOrientation(LinearLayout.VERTICAL);
+        hero.setGravity(Gravity.CENTER_HORIZONTAL);
+        hero.setPadding(0, dp(12), 0, dp(14));
 
+        LinearLayout badge = new LinearLayout(this);
+        badge.setOrientation(LinearLayout.HORIZONTAL);
+        badge.setGravity(Gravity.CENTER_VERTICAL);
+        badge.setPadding(dp(9), dp(6), dp(12), dp(6));
+        badge.setBackground(roundedDrawable("#1C1C26", 20, "#2A2A38", 1));
+
+        statusDot = new TextView(this);
+        statusDot.setText(" ");
+        statusDot.setBackground(roundedDrawable("#444452", 8, null, 0));
+        LinearLayout.LayoutParams dotLp = new LinearLayout.LayoutParams(dp(8), dp(8));
+        dotLp.setMargins(0, 0, dp(7), 0);
+        badge.addView(statusDot, dotLp);
+
+        statusBadge = new TextView(this);
+        statusBadge.setTextColor(Color.parseColor("#7E7E92"));
+        statusBadge.setTextSize(TypedValue.COMPLEX_UNIT_SP, 11);
+        badge.addView(statusBadge, lpWrapWrapNoMargin());
+        hero.addView(badge, lpWrapWrapNoMargin());
+
+        LinearLayout amountRow = new LinearLayout(this);
+        amountRow.setGravity(Gravity.CENTER);
+        amountRow.setPadding(0, dp(12), 0, 0);
+        sessionAmount = new TextView(this);
+        sessionAmount.setTextColor(Color.parseColor("#F0F0F8"));
+        sessionAmount.setTextSize(TypedValue.COMPLEX_UNIT_SP, 44);
+        sessionAmount.setTypeface(Typeface.create(Typeface.MONOSPACE, Typeface.NORMAL));
+        sessionAmount.setIncludeFontPadding(false);
+        amountRow.addView(sessionAmount, lpWrapWrapNoMargin());
+
+        sessionUnit = new TextView(this);
+        sessionUnit.setTextColor(Color.parseColor("#55556A"));
+        sessionUnit.setTextSize(TypedValue.COMPLEX_UNIT_SP, 16);
+        sessionUnit.setTypeface(Typeface.MONOSPACE);
+        LinearLayout.LayoutParams unitLp = lpWrapWrapNoMargin();
+        unitLp.setMargins(dp(5), dp(14), 0, 0);
+        amountRow.addView(sessionUnit, unitLp);
+        hero.addView(amountRow, lpWrapWrapNoMargin());
+
+        sessionSub = new TextView(this);
+        sessionSub.setText("передано за сессию");
+        sessionSub.setTextColor(Color.parseColor("#55556A"));
+        sessionSub.setTextSize(TypedValue.COMPLEX_UNIT_SP, 12);
+        hero.addView(sessionSub, lpWrapWrapNoMargin());
+        return hero;
+    }
+
+    private View buildConnectButton() {
+        LinearLayout wrap = new LinearLayout(this);
+        wrap.setPadding(0, 0, 0, dp(12));
+        toggleButton = new TextView(this);
+        toggleButton.setGravity(Gravity.CENTER);
+        toggleButton.setTextSize(TypedValue.COMPLEX_UNIT_SP, 15);
+        toggleButton.setTypeface(Typeface.DEFAULT_BOLD);
+        toggleButton.setPadding(dp(16), dp(15), dp(16), dp(15));
+        toggleButton.setClickable(true);
+        toggleButton.setOnClickListener(v -> onToggleClick());
+        wrap.addView(toggleButton, new LinearLayout.LayoutParams(
+                ViewGroup.LayoutParams.MATCH_PARENT,
+                ViewGroup.LayoutParams.WRAP_CONTENT
+        ));
+        return wrap;
+    }
+
+    private LinearLayout buildTransportChips() {
+        chipBar = new LinearLayout(this);
+        chipBar.setOrientation(LinearLayout.HORIZONTAL);
+        chipBar.setGravity(Gravity.CENTER_VERTICAL);
+        chipBar.setPadding(0, 0, 0, dp(12));
+        addTransportChip("SEI", OlcUriParser.TRANSPORT_SEI);
+        addTransportChip("VP8", OlcUriParser.TRANSPORT_VP8);
+        addTransportChip("Data", OlcUriParser.TRANSPORT_DATA);
+        addTransportChip("Video", OlcUriParser.TRANSPORT_VIDEO);
+        return chipBar;
+    }
+
+    private void addTransportChip(String label, String transport) {
+        TextView chip = new TextView(this);
+        chip.setText(label);
+        chip.setGravity(Gravity.CENTER);
+        chip.setTextSize(TypedValue.COMPLEX_UNIT_SP, 11);
+        chip.setPadding(dp(12), dp(7), dp(12), dp(7));
+        chip.setClickable(true);
+        chip.setOnClickListener(v -> switchSelectedTransport(transport));
+        chip.setTag(transport);
+        LinearLayout.LayoutParams lp = new LinearLayout.LayoutParams(
+                ViewGroup.LayoutParams.WRAP_CONTENT,
+                ViewGroup.LayoutParams.WRAP_CONTENT
+        );
+        lp.setMargins(0, 0, dp(7), 0);
+        chipBar.addView(chip, lp);
+    }
+
+    private LinearLayout buildMetricsGrid() {
+        LinearLayout grid = new LinearLayout(this);
+        grid.setOrientation(LinearLayout.VERTICAL);
+        grid.setPadding(0, 0, 0, dp(4));
+
+        LinearLayout row1 = new LinearLayout(this);
+        row1.setOrientation(LinearLayout.HORIZONTAL);
+        rxValue = metricValue(row1, "↓ ВХОДЯЩИЙ", "0 KB/s", "ожидание");
+        txValue = metricValue(row1, "↑ ИСХОДЯЩИЙ", "0 KB/s", "ожидание");
+        grid.addView(row1, lpMatchWrapNoMargin());
+
+        LinearLayout row2 = new LinearLayout(this);
+        row2.setOrientation(LinearLayout.HORIZONTAL);
+        latencyValue = metricValue(row2, "ЗАДЕРЖКА", "— ms", "SOCKS probe");
+        uptimeValue = metricValue(row2, "АПТАЙМ", "0:00", "сессия");
+        grid.addView(row2, lpMatchWrapNoMargin());
+        return grid;
+    }
+
+    private TextView metricValue(LinearLayout row, String label, String value, String delta) {
+        LinearLayout card = new LinearLayout(this);
+        card.setOrientation(LinearLayout.VERTICAL);
+        card.setPadding(dp(12), dp(10), dp(12), dp(10));
+        card.setBackground(roundedDrawable("#16161F", 12, "#2A2A38", 1));
+
+        TextView l = smallMono(label);
+        l.setTextColor(Color.parseColor("#55556A"));
+        card.addView(l, lpMatchWrapNoMargin());
+
+        TextView v = new TextView(this);
+        v.setText(value);
+        v.setTextColor(Color.parseColor("#F0F0F8"));
+        v.setTextSize(TypedValue.COMPLEX_UNIT_SP, 18);
+        v.setTypeface(Typeface.MONOSPACE);
+        v.setPadding(0, dp(3), 0, 0);
+        card.addView(v, lpMatchWrapNoMargin());
+
+        TextView d = smallMono(delta);
+        d.setTextColor(Color.parseColor("#6C5CE7"));
+        d.setPadding(0, dp(2), 0, 0);
+        card.addView(d, lpMatchWrapNoMargin());
+        if (rxValue == null) rxDelta = d;
+        else if (txValue == null) txDelta = d;
+
+        LinearLayout.LayoutParams lp = new LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f);
+        lp.setMargins(dp(4), dp(4), dp(4), dp(4));
+        row.addView(card, lp);
+        return v;
+    }
+
+    private LinearLayout buildProfilesPanel(boolean full) {
+        LinearLayout card = card();
+        LinearLayout header = row();
+        TextView title = sectionTitle(full ? "ПРОФИЛИ" : "СЕРВЕРЫ");
+        header.addView(title, new LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f));
+        TextView add = smallAction("+ добавить");
+        add.setOnClickListener(v -> {
+            activeTab = TAB_PROFILES;
+            renderActiveTab();
+            openProfileEditor(null, true);
+        });
+        header.addView(add, lpWrapWrapNoMargin());
+        card.addView(header, lpMatchWrapNoMargin());
+
+        profileCards = new LinearLayout(this);
+        profileCards.setOrientation(LinearLayout.VERTICAL);
+        profileCards.setPadding(0, dp(8), 0, 0);
+        card.addView(profileCards, lpMatchWrapNoMargin());
+        refreshProfiles();
         return card;
     }
 
-    private LinearLayout buildConnectionCard() {
-        LinearLayout controlCard = cardLayout();
-        controlCard.setPadding(dp(18), dp(18), dp(18), dp(18));
-
-        LinearLayout statusRow = new LinearLayout(this);
-        statusRow.setOrientation(LinearLayout.HORIZONTAL);
-        statusRow.setGravity(Gravity.CENTER_VERTICAL);
-        statusRow.setPadding(0, 0, 0, dp(8));
-
-        TextView connectionLabel = new TextView(this);
-        connectionLabel.setText("Connection");
-        connectionLabel.setTextColor(Color.parseColor("#6F737B"));
-        connectionLabel.setTextSize(TypedValue.COMPLEX_UNIT_SP, 13);
-        statusRow.addView(connectionLabel, new LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f));
-
-        stateChip = new TextView(this);
-        stateChip.setTextSize(TypedValue.COMPLEX_UNIT_SP, 12);
-        stateChip.setTypeface(Typeface.DEFAULT_BOLD);
-        stateChip.setPadding(dp(12), dp(8), dp(12), dp(8));
-        stateChip.setGravity(Gravity.CENTER);
-        statusRow.addView(stateChip, lpWrapWrapNoMargin());
-        controlCard.addView(statusRow, lpMatchWrapNoMargin());
-
-        toggleButton = primaryButton("Подключить");
-        toggleButton.setOnClickListener(v -> onToggleClick());
-        controlCard.addView(toggleButton, lpMatchWrap());
-
-        TextView batteryButton = secondaryTextButton("Фон / энергосбережение");
-        batteryButton.setOnClickListener(v -> requestBatteryOptimizationExemption());
-        controlCard.addView(batteryButton, lpMatchWrap());
-
-        statusView = new TextView(this);
-        statusView.setTextSize(TypedValue.COMPLEX_UNIT_SP, 14);
-        statusView.setTextColor(Color.parseColor("#363A42"));
-        statusView.setPadding(0, dp(2), 0, 0);
-        controlCard.addView(statusView, lpMatchWrapNoMargin());
-
-        return controlCard;
+    private LinearLayout buildEventPanel(int limit) {
+        LinearLayout wrap = new LinearLayout(this);
+        wrap.setOrientation(LinearLayout.VERTICAL);
+        wrap.setPadding(0, dp(2), 0, dp(2));
+        TextView title = sectionTitle("СОБЫТИЯ");
+        wrap.addView(title, lpMatchWrapNoMargin());
+        eventLog = new LinearLayout(this);
+        eventLog.setOrientation(LinearLayout.VERTICAL);
+        eventLog.setTag(limit);
+        eventLog.setPadding(0, dp(7), 0, 0);
+        wrap.addView(eventLog, lpMatchWrapNoMargin());
+        refreshEvents();
+        return wrap;
     }
 
-    private LinearLayout buildDetailsCard() {
-        LinearLayout detailsCard = cardLayout();
-        detailsCard.setPadding(dp(18), dp(18), dp(18), dp(18));
-
-        TextView detailsTitle = sectionLabel("Details");
-        detailsCard.addView(detailsTitle, lpMatchWrapNoMargin());
-
-        detailsView = new TextView(this);
-        detailsView.setTextSize(TypedValue.COMPLEX_UNIT_SP, 12);
-        detailsView.setTextColor(Color.parseColor("#606772"));
-        detailsView.setTypeface(Typeface.MONOSPACE);
-        detailsView.setLineSpacing(0f, 1.1f);
+    private LinearLayout buildStatusPanel() {
+        LinearLayout card = card();
+        statusView = bodyText("Готов.");
+        card.addView(statusView, lpMatchWrapNoMargin());
+        detailsView = smallMono("Технические детали появятся после запуска.");
+        detailsView.setTextColor(Color.parseColor("#66667A"));
         detailsView.setPadding(0, dp(8), 0, 0);
-        detailsView.setText("Технические детали появятся после запуска.");
-        detailsCard.addView(detailsView, lpMatchWrapNoMargin());
+        card.addView(detailsView, lpMatchWrapNoMargin());
+        return card;
+    }
 
-        return detailsCard;
+    private LinearLayout buildTrafficSummary() {
+        LinearLayout card = card();
+        card.addView(sectionTitle("СЕССИЯ"), lpMatchWrapNoMargin());
+        TextView body = bodyText("Принято: " + formatBytes(sessionRxBytes) + "\nОтправлено: " + formatBytes(sessionTxBytes) + "\nТранспорт: " + activeTransportLabel());
+        body.setPadding(0, dp(8), 0, 0);
+        card.addView(body, lpMatchWrapNoMargin());
+        return card;
+    }
+
+    private LinearLayout buildSettingsForm() {
+        LinearLayout card = card();
+        Profile selected = getSelectedProfile();
+        if (selected == null) {
+            card.addView(bodyText("Выбери профиль, чтобы редактировать параметры транспорта."), lpMatchWrapNoMargin());
+            TextView openProfiles = primarySmallButton("Открыть профили");
+            openProfiles.setOnClickListener(v -> {
+                activeTab = TAB_PROFILES;
+                renderActiveTab();
+            });
+            card.addView(openProfiles, lpMatchWrap());
+            return card;
+        }
+
+        OlcConfig config;
+        try {
+            config = OlcUriParser.parse(selected.link);
+        } catch (Exception e) {
+            card.addView(bodyText("Ссылка нестандартная, открыл обычный редактор."), lpMatchWrapNoMargin());
+            TextView edit = primarySmallButton("Редактировать URI");
+            edit.setOnClickListener(v -> {
+                activeTab = TAB_PROFILES;
+                renderActiveTab();
+                openProfileEditor(selected, true);
+            });
+            card.addView(edit, lpMatchWrap());
+            return card;
+        }
+
+        card.addView(sectionTitle(selected.name), lpMatchWrapNoMargin());
+        card.addView(smallText(config.carrier + " / " + config.transport + " / lanes=" + lanesFor(config)), lpMatchWrap());
+        mtuInput = settingInput(card, "MTU", config.param("mtu", ""));
+        fpsInput = settingInput(card, "FPS / SEI FPS", config.param("fps", config.param("sei-fps", "30")));
+        batchInput = settingInput(card, "Batch / SEI batch", config.param("batch", config.param("sei-batch", "8")));
+        fragInput = settingInput(card, "Fragment bytes", config.param("frag", config.param("sei-frag", "700")));
+        ackInput = settingInput(card, "SEI ACK ms", config.param("sei-ack-ms", config.param("ack-ms", "10000")));
+        lanesInput = settingInput(card, "Multipath lanes", config.param("mc-lanes", config.param("sei-lanes", config.param("lanes", "12"))));
+        liveTimeoutInput = settingInput(card, "Liveness timeout", config.param("liveness-timeout", "60s"));
+        liveFailuresInput = settingInput(card, "Liveness failures", config.param("liveness-failures", "3"));
+
+        TextView save = primarySmallButton("Сохранить параметры");
+        save.setOnClickListener(v -> saveSettings(selected));
+        card.addView(save, lpMatchWrap());
+
+        TextView edit = secondarySmallButton("Открыть полный URI");
+        edit.setOnClickListener(v -> {
+            activeTab = TAB_PROFILES;
+            renderActiveTab();
+            openProfileEditor(selected, true);
+        });
+        card.addView(edit, lpMatchWrapNoMargin());
+        return card;
+    }
+
+    private EditText settingInput(LinearLayout parent, String label, String value) {
+        TextView l = smallMono(label);
+        l.setTextColor(Color.parseColor("#66667A"));
+        parent.addView(l, lpMatchWrapNoMargin());
+        EditText input = new EditText(this);
+        input.setSingleLine(true);
+        input.setText(value == null ? "" : value);
+        input.setInputType(InputType.TYPE_CLASS_TEXT | InputType.TYPE_TEXT_FLAG_NO_SUGGESTIONS);
+        input.setTextColor(Color.parseColor("#F0F0F8"));
+        input.setHintTextColor(Color.parseColor("#55556A"));
+        input.setTextSize(TypedValue.COMPLEX_UNIT_SP, 14);
+        input.setPadding(dp(12), dp(10), dp(12), dp(10));
+        input.setBackground(roundedDrawable("#101018", 12, "#2A2A38", 1));
+        parent.addView(input, lpMatchWrap());
+        return input;
+    }
+
+    private LinearLayout titleBlock(String title, String subtitle) {
+        LinearLayout box = new LinearLayout(this);
+        box.setOrientation(LinearLayout.VERTICAL);
+        box.setPadding(0, dp(8), 0, dp(12));
+        TextView t = new TextView(this);
+        t.setText(title);
+        t.setTextColor(Color.parseColor("#F0F0F8"));
+        t.setTextSize(TypedValue.COMPLEX_UNIT_SP, 24);
+        t.setTypeface(Typeface.DEFAULT_BOLD);
+        box.addView(t, lpMatchWrapNoMargin());
+        TextView s = bodyText(subtitle);
+        s.setTextColor(Color.parseColor("#66667A"));
+        box.addView(s, lpMatchWrapNoMargin());
+        return box;
+    }
+
+    private void renderBottomNav() {
+        if (bottomNav == null) return;
+        bottomNav.removeAllViews();
+        homeNav = navItem("Главная", TAB_HOME);
+        profilesNav = navItem("Профили", TAB_PROFILES);
+        trafficNav = navItem("Трафик", TAB_TRAFFIC);
+        settingsNav = navItem("Настройки", TAB_SETTINGS);
+        bottomNav.addView(homeNav, navLp());
+        bottomNav.addView(profilesNav, navLp());
+        bottomNav.addView(trafficNav, navLp());
+        bottomNav.addView(settingsNav, navLp());
+    }
+
+    private TextView navItem(String label, int tab) {
+        TextView nav = new TextView(this);
+        nav.setText(label);
+        nav.setGravity(Gravity.CENTER);
+        nav.setTextSize(TypedValue.COMPLEX_UNIT_SP, 10);
+        nav.setTypeface(Typeface.DEFAULT_BOLD);
+        nav.setTextColor(tab == activeTab ? Color.parseColor("#6C5CE7") : Color.parseColor("#444456"));
+        nav.setPadding(dp(4), dp(8), dp(4), dp(8));
+        nav.setOnClickListener(v -> {
+            activeTab = tab;
+            renderActiveTab();
+        });
+        return nav;
+    }
+
+    private void refreshDynamicUi() {
+        applyConnectionState(connectionState, null);
+        if (statusBadge != null) statusBadge.setText(statusBadgeText());
+        if (statusDot != null) statusDot.setBackground(roundedDrawable(statusDotColor(), 8, null, 0));
+        if (sessionAmount != null) {
+            ByteLabel bytes = splitBytes(sessionRxBytes + sessionTxBytes);
+            sessionAmount.setText(bytes.value);
+            if (sessionUnit != null) sessionUnit.setText(bytes.unit);
+        }
+        if (sessionSub != null) sessionSub.setText(connectionState == STATE_CONNECTED ? "передано за сессию" : "ожидание подключения");
+        if (rxValue != null) rxValue.setText(formatRate(rxBps));
+        if (txValue != null) txValue.setText(formatRate(txBps));
+        if (latencyValue != null) latencyValue.setText(probeLatencyMs >= 0 ? probeLatencyMs + " ms" : "— ms");
+        if (uptimeValue != null) uptimeValue.setText(formatUptime(uptimeMs));
+        if (rxDelta != null) rxDelta.setText(activeTransportLabel());
+        if (txDelta != null) txDelta.setText(telemetryLanes > 1 ? "SEI · " + telemetryLanes + " lanes" : "один канал");
+        refreshTransportChips();
+        refreshProfiles();
+        refreshEvents();
+    }
+
+    private void refreshTransportChips() {
+        if (chipBar == null) return;
+        Profile selected = getSelectedProfile();
+        String active = selected == null ? telemetryTransport : selected.transport;
+        for (int i = 0; i < chipBar.getChildCount(); i++) {
+            View child = chipBar.getChildAt(i);
+            if (!(child instanceof TextView)) continue;
+            String transport = String.valueOf(child.getTag());
+            boolean on = transport.equals(active);
+            TextView chip = (TextView) child;
+            chip.setTextColor(on ? Color.parseColor("#D7D2FF") : Color.parseColor("#66667A"));
+            chip.setBackground(roundedDrawable(on ? "#1E1E2E" : "#16161F", 20, on ? "#6C5CE7" : "#2A2A38", 1));
+        }
+    }
+
+    private void refreshProfiles() {
+        if (profileCards == null) return;
+        profileCards.removeAllViews();
+        List<Profile> profiles = loadProfiles();
+        if (profiles.isEmpty()) {
+            profileCards.addView(bodyText("Профилей пока нет."), lpMatchWrapNoMargin());
+            return;
+        }
+        for (Profile profile : profiles) {
+            profileCards.addView(profileRow(profile), lpMatchWrap());
+        }
+    }
+
+    private LinearLayout profileRow(Profile profile) {
+        boolean selected = profile.id.equals(selectedProfileId);
+        LinearLayout row = new LinearLayout(this);
+        row.setOrientation(LinearLayout.HORIZONTAL);
+        row.setGravity(Gravity.CENTER_VERTICAL);
+        row.setPadding(dp(12), dp(11), dp(12), dp(11));
+        row.setBackground(roundedDrawable("#16161F", 14, selected ? "#00D2FF" : "#2A2A38", 1));
+        row.setOnClickListener(v -> selectProfile(profile));
+
+        TextView active = new TextView(this);
+        active.setText(" ");
+        active.setBackground(roundedDrawable(selected ? "#00D2FF" : "#2A2A38", 7, null, 0));
+        LinearLayout.LayoutParams dotLp = new LinearLayout.LayoutParams(dp(7), dp(7));
+        dotLp.setMargins(0, 0, dp(11), 0);
+        row.addView(active, dotLp);
+
+        LinearLayout text = new LinearLayout(this);
+        text.setOrientation(LinearLayout.VERTICAL);
+        TextView name = bodyText(profile.name);
+        name.setTextColor(Color.parseColor("#CCCCD8"));
+        name.setTypeface(Typeface.DEFAULT_BOLD);
+        text.addView(name, lpMatchWrapNoMargin());
+        TextView meta = smallText(profile.carrier + " · " + profile.transport + " · " + lanesLabel(profile.link));
+        text.addView(meta, lpMatchWrapNoMargin());
+        row.addView(text, new LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f));
+
+        TextView edit = smallAction("изменить");
+        edit.setOnClickListener(v -> {
+            activeTab = TAB_PROFILES;
+            renderActiveTab();
+            openProfileEditor(profile, true);
+        });
+        row.addView(edit, lpWrapWrapNoMargin());
+        return row;
+    }
+
+    private void refreshEvents() {
+        if (eventLog == null) return;
+        eventLog.removeAllViews();
+        int limit = eventLog.getTag() instanceof Integer ? (Integer) eventLog.getTag() : 5;
+        if (recentEvents.isEmpty()) {
+            eventLog.addView(eventRow("WAIT", "События появятся после запуска."), lpMatchWrapNoMargin());
+            return;
+        }
+        int count = Math.min(limit, recentEvents.size());
+        for (int i = 0; i < count; i++) {
+            eventLog.addView(eventRow(tagForEvent(recentEvents.get(i)), compactEvent(recentEvents.get(i))), lpMatchWrapNoMargin());
+        }
+    }
+
+    private LinearLayout eventRow(String tag, String text) {
+        LinearLayout row = new LinearLayout(this);
+        row.setOrientation(LinearLayout.HORIZONTAL);
+        row.setGravity(Gravity.TOP);
+        row.setPadding(0, dp(5), 0, dp(5));
+
+        TextView time = smallMono(currentShortTime());
+        time.setTextColor(Color.parseColor("#3E3E50"));
+        row.addView(time, fixedWidth(dp(42)));
+
+        TextView tagView = smallMono(tag);
+        tagView.setTextColor(tagColor(tag));
+        tagView.setGravity(Gravity.CENTER);
+        tagView.setPadding(dp(5), dp(2), dp(5), dp(2));
+        tagView.setBackground(roundedDrawable("#1C1C26", 5, null, 0));
+        LinearLayout.LayoutParams tagLp = lpWrapWrapNoMargin();
+        tagLp.setMargins(0, 0, dp(8), 0);
+        row.addView(tagView, tagLp);
+
+        TextView msg = smallText(text);
+        row.addView(msg, new LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f));
+        return row;
+    }
+
+    private void openProfileEditor(Profile profile, boolean focus) {
+        if (editorHost == null) return;
+        editorHost.removeAllViews();
+        LinearLayout card = card();
+        LinearLayout header = row();
+        editorTitle = sectionTitle(profile == null ? "НОВЫЙ ПРОФИЛЬ" : "РЕДАКТОР ПРОФИЛЯ");
+        header.addView(editorTitle, new LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f));
+        editorDeleteButton = smallAction("удалить");
+        editorDeleteButton.setVisibility(profile == null ? View.GONE : View.VISIBLE);
+        editorDeleteButton.setOnClickListener(v -> deleteEditingProfile());
+        header.addView(editorDeleteButton, lpWrapWrapNoMargin());
+        card.addView(header, lpMatchWrapNoMargin());
+
+        editingProfileId = profile == null ? null : profile.id;
+        profileNameInput = editText("Название профиля", false);
+        profileNameInput.setText(profile == null ? "" : profile.name);
+        card.addView(profileNameInput, lpMatchWrap());
+
+        linkInput = editText("olcrtc://...", true);
+        linkInput.setMinLines(6);
+        linkInput.setGravity(Gravity.TOP | Gravity.START);
+        linkInput.setText(profile == null ? "" : profile.link);
+        card.addView(linkInput, lpMatchWrap());
+
+        TextView save = primarySmallButton("Сохранить профиль");
+        save.setOnClickListener(v -> saveEditorProfile());
+        card.addView(save, lpMatchWrap());
+
+        editorHost.addView(card, lpMatchWrapNoMargin());
+        if (focus) linkInput.requestFocus();
+    }
+
+    private EditText editText(String hint, boolean multiline) {
+        EditText edit = new EditText(this);
+        edit.setHint(hint);
+        edit.setTextColor(Color.parseColor("#F0F0F8"));
+        edit.setHintTextColor(Color.parseColor("#55556A"));
+        edit.setTextSize(TypedValue.COMPLEX_UNIT_SP, 14);
+        edit.setPadding(dp(12), dp(12), dp(12), dp(12));
+        edit.setBackground(roundedDrawable("#101018", 12, "#2A2A38", 1));
+        edit.setInputType(multiline
+                ? InputType.TYPE_CLASS_TEXT | InputType.TYPE_TEXT_FLAG_MULTI_LINE | InputType.TYPE_TEXT_FLAG_NO_SUGGESTIONS
+                : InputType.TYPE_CLASS_TEXT | InputType.TYPE_TEXT_FLAG_NO_SUGGESTIONS);
+        return edit;
     }
 
     private void handleIncomingIntent(Intent intent) {
-        if (intent != null && intent.getDataString() != null) {
-            openNewProfileEditor(intent.getDataString());
-            setStatus("Ссылка получена. Сохрани её как профиль.");
-            setDetails("Ссылка получена из Android intent.");
-        }
+        if (intent == null || intent.getDataString() == null) return;
+        activeTab = TAB_PROFILES;
+        renderActiveTab();
+        openProfileEditor(new Profile("", "", intent.getDataString(), "", ""), true);
+        setStatus("Ссылка получена. Сохрани её как профиль.");
     }
 
     private void onToggleClick() {
         hideEditorFocus();
-        if (connectionState == STATE_CONNECTED || connectionState == STATE_CONNECTING) {
-            stopVpn();
-        } else {
-            connect();
-        }
+        if (connectionState == STATE_CONNECTED || connectionState == STATE_CONNECTING) stopVpn();
+        else connect();
     }
 
     private void connect() {
         try {
             Profile selected = getSelectedProfile();
-            String link;
-            if (selected != null) {
-                link = selected.link;
-            } else {
-                SharedPreferences prefs = getSharedPreferences(PREFS, MODE_PRIVATE);
-                link = prefs.getString(KEY_LINK, "");
-            }
-
+            String link = selected != null ? selected.link : getSharedPreferences(PREFS, MODE_PRIVATE).getString(KEY_LINK, "");
             if (link == null || link.trim().isEmpty()) {
-                openNewProfileEditor("");
-                applyConnectionState(STATE_DISCONNECTED, "Нет профиля");
+                activeTab = TAB_PROFILES;
+                renderActiveTab();
+                openProfileEditor(null, true);
                 setStatus("Сначала добавь olcRTC-профиль.");
+                applyConnectionState(STATE_DISCONNECTED, "Нет профиля");
                 return;
             }
-
             OlcUriParser.parse(link);
             getSharedPreferences(PREFS, MODE_PRIVATE).edit().putString(KEY_LINK, link).apply();
             pendingLink = link;
-            applyConnectionState(STATE_CONNECTING, "Проверяю VPN-разрешение...");
+            applyConnectionState(STATE_CONNECTING, "VPN permission");
             setStatus("Готовлю подключение.");
-
             Intent prepare = VpnService.prepare(this);
-            if (prepare != null) {
-                startActivityForResult(prepare, VPN_REQUEST_CODE);
-            } else {
-                startVpn(link);
-            }
+            if (prepare != null) startActivityForResult(prepare, VPN_REQUEST_CODE);
+            else startVpn(link);
         } catch (Exception e) {
             applyConnectionState(STATE_DISCONNECTED, "Ошибка ссылки");
             setStatus(humanError("bad_link: " + e.getMessage()));
@@ -416,14 +846,11 @@ public final class MainActivity extends Activity {
     @Override
     protected void onActivityResult(int requestCode, int resultCode, Intent data) {
         super.onActivityResult(requestCode, resultCode, data);
-        if (requestCode == VPN_REQUEST_CODE) {
-            if (resultCode == RESULT_OK && pendingLink != null) {
-                startVpn(pendingLink);
-            } else {
-                applyConnectionState(STATE_DISCONNECTED, "Разрешение не выдано");
-                setStatus("VPN-разрешение не выдано.");
-                setDetails("Android не разрешил создать VPN-подключение.");
-            }
+        if (requestCode != VPN_REQUEST_CODE) return;
+        if (resultCode == RESULT_OK && pendingLink != null) startVpn(pendingLink);
+        else {
+            applyConnectionState(STATE_DISCONNECTED, "Нет разрешения");
+            setStatus("VPN-разрешение не выдано.");
         }
     }
 
@@ -431,14 +858,10 @@ public final class MainActivity extends Activity {
         Intent intent = new Intent(this, OlcVpnService.class);
         intent.setAction(OlcVpnService.ACTION_START);
         intent.putExtra(OlcVpnService.EXTRA_LINK, link);
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
-            startForegroundService(intent);
-        } else {
-            startService(intent);
-        }
-        applyConnectionState(STATE_CONNECTING, "Подключение...");
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) startForegroundService(intent);
+        else startService(intent);
+        applyConnectionState(STATE_CONNECTING, "Подключение");
         setStatus("Подключаюсь...");
-        setDetails("Сервис запущен, жду статуса от olcRTC.");
     }
 
     private void stopVpn() {
@@ -447,99 +870,107 @@ public final class MainActivity extends Activity {
         startService(intent);
         applyConnectionState(STATE_DISCONNECTED, "Отключено");
         setStatus("Отключаю VPN...");
-        setDetails("Остановка сервиса отправлена.");
     }
 
-    private void openNewProfileEditor(String link) {
-        editingProfileId = null;
-        if (editorTitle != null) editorTitle.setText("New profile");
-        if (profileNameInput != null) profileNameInput.setText("");
-        if (linkInput != null) linkInput.setText(link == null ? "" : link);
-        if (editorDeleteButton != null) editorDeleteButton.setVisibility(View.GONE);
-        if (editorCard != null) editorCard.setVisibility(View.VISIBLE);
-        setDetails("Вставь ссылку, при желании задай название и нажми «Сохранить».");
+    private void switchSelectedTransport(String transport) {
+        Profile selected = getSelectedProfile();
+        if (selected == null) {
+            activeTab = TAB_PROFILES;
+            renderActiveTab();
+            openProfileEditor(null, true);
+            setStatus("Выбери профиль для смены транспорта.");
+            return;
+        }
+        try {
+            String rewritten = rewriteTransport(selected.link, transport);
+            saveProfile(selected.id, selected.name, rewritten);
+            selectedProfileId = selected.id;
+            getSharedPreferences(PREFS, MODE_PRIVATE).edit()
+                    .putString(KEY_SELECTED_PROFILE_ID, selectedProfileId)
+                    .putString(KEY_LINK, rewritten)
+                    .apply();
+            setStatus("Транспорт переключён: " + transport);
+            renderActiveTab();
+            if (connectionState != STATE_DISCONNECTED) {
+                stopVpn();
+                new Thread(() -> {
+                    try { Thread.sleep(700); } catch (InterruptedException ignored) {}
+                    runOnUiThread(this::connect);
+                }, "transport-restart").start();
+            }
+        } catch (Exception e) {
+            activeTab = TAB_PROFILES;
+            renderActiveTab();
+            openProfileEditor(selected, true);
+            setStatus("Не смог безопасно переписать URI. Открыл обычный редактор.");
+        }
     }
 
-    private void openEditProfileEditor(Profile profile) {
-        if (profile == null) return;
-        editingProfileId = profile.id;
-        if (editorTitle != null) editorTitle.setText("Profile settings");
-        if (profileNameInput != null) profileNameInput.setText(profile.name);
-        if (linkInput != null) linkInput.setText(profile.link);
-        if (editorDeleteButton != null) editorDeleteButton.setVisibility(View.VISIBLE);
-        if (editorCard != null) editorCard.setVisibility(View.VISIBLE);
-        setStatus("Редактирование профиля.");
-        setDetails(profile.carrier + " / " + profile.transport + "\n" + shortLink(profile.link));
-    }
-
-    private void closeProfileEditor() {
-        hideEditorFocus();
-        if (editorCard != null) editorCard.setVisibility(View.GONE);
-        editingProfileId = null;
+    private void saveSettings(Profile selected) {
+        try {
+            Map<String, String> edits = new LinkedHashMap<>();
+            edits.put("mtu", text(mtuInput));
+            edits.put("fps", text(fpsInput));
+            edits.put("batch", text(batchInput));
+            edits.put("frag", text(fragInput));
+            edits.put("sei-ack-ms", text(ackInput));
+            edits.put("mc-lanes", text(lanesInput));
+            edits.put("liveness-timeout", text(liveTimeoutInput));
+            edits.put("liveness-failures", text(liveFailuresInput));
+            String rewritten = rewriteParams(selected.link, edits);
+            saveProfile(selected.id, selected.name, rewritten);
+            getSharedPreferences(PREFS, MODE_PRIVATE).edit().putString(KEY_LINK, rewritten).apply();
+            setStatus("Параметры профиля сохранены.");
+            renderActiveTab();
+        } catch (Exception e) {
+            setStatus("Не смог сохранить параметры: " + e.getMessage());
+        }
     }
 
     private void saveEditorProfile() {
-        hideEditorFocus();
         try {
-            String link = linkInput == null ? "" : linkInput.getText().toString().trim();
-            OlcConfig config = OlcUriParser.parse(link);
-
-            SharedPreferences prefs = getSharedPreferences(PREFS, MODE_PRIVATE);
+            String rawLink = linkInput == null ? "" : linkInput.getText().toString().trim();
+            OlcConfig config = OlcUriParser.parse(rawLink);
+            String name = profileNameInput == null ? "" : profileNameInput.getText().toString().trim();
+            if (name.isEmpty()) name = buildProfileName(config);
             String id = editingProfileId;
             if (id == null || id.trim().isEmpty()) {
-                String existingId = findProfileIdByLink(link);
-                id = existingId == null ? "p" + System.currentTimeMillis() : existingId;
+                String existing = findProfileIdByLink(rawLink);
+                id = existing == null ? String.valueOf(System.currentTimeMillis()) : existing;
+                addProfileId(id);
             }
-
-            String customName = profileNameInput == null ? "" : profileNameInput.getText().toString().trim();
-            String name = customName.isEmpty() ? buildProfileName(config) : customName;
-
-            prefs.edit()
-                    .putString("profile_" + id + "_name", name)
-                    .putString("profile_" + id + "_link", link)
-                    .putString("profile_" + id + "_carrier", config.carrier)
-                    .putString("profile_" + id + "_transport", config.transport)
-                    .putString(KEY_SELECTED_PROFILE_ID, id)
-                    .putString(KEY_LINK, link)
-                    .apply();
-
-            addProfileId(id);
+            saveProfile(id, name, rawLink);
             selectedProfileId = id;
-            editingProfileId = id;
-            refreshProfilesList();
-            closeProfileEditor();
+            getSharedPreferences(PREFS, MODE_PRIVATE).edit()
+                    .putString(KEY_SELECTED_PROFILE_ID, id)
+                    .putString(KEY_LINK, rawLink)
+                    .apply();
             setStatus("Профиль сохранён: " + name);
-            setDetails(config.carrier + " / " + config.transport + (config.hasParams() ? " <" + config.paramsPretty() + ">" : "") + "\nclientId=" + config.clientId);
+            activeTab = TAB_PROFILES;
+            renderActiveTab();
+            openProfileEditor(getSelectedProfile(), false);
         } catch (Exception e) {
             setStatus(humanError("bad_link: " + e.getMessage()));
-            setDetails("Profile save error: " + safe(e.getMessage()));
+            setDetails("Parser error: " + safe(e.getMessage()));
         }
     }
 
     private void deleteEditingProfile() {
         if (editingProfileId == null || editingProfileId.trim().isEmpty()) return;
-        deleteProfile(editingProfileId);
-        closeProfileEditor();
-    }
-
-    private void deleteProfile(String id) {
-        SharedPreferences prefs = getSharedPreferences(PREFS, MODE_PRIVATE);
-        prefs.edit()
-                .remove("profile_" + id + "_name")
-                .remove("profile_" + id + "_link")
-                .remove("profile_" + id + "_carrier")
-                .remove("profile_" + id + "_transport")
-                .apply();
-
-        removeProfileId(id);
-        if (id.equals(selectedProfileId)) {
+        SharedPreferences.Editor edit = getSharedPreferences(PREFS, MODE_PRIVATE).edit();
+        edit.remove("profile_" + editingProfileId + "_link");
+        edit.remove("profile_" + editingProfileId + "_name");
+        edit.remove("profile_" + editingProfileId + "_carrier");
+        edit.remove("profile_" + editingProfileId + "_transport");
+        if (editingProfileId.equals(selectedProfileId)) {
             selectedProfileId = "";
-            prefs.edit().remove(KEY_SELECTED_PROFILE_ID).apply();
+            edit.remove(KEY_SELECTED_PROFILE_ID);
         }
-
-        refreshProfilesList();
+        edit.apply();
+        removeProfileId(editingProfileId);
+        editingProfileId = null;
         setStatus("Профиль удалён.");
-        setDetails("Выбери другой профиль или добавь новый.");
+        renderActiveTab();
     }
 
     private void selectProfile(Profile profile) {
@@ -549,69 +980,18 @@ public final class MainActivity extends Activity {
                 .putString(KEY_SELECTED_PROFILE_ID, profile.id)
                 .putString(KEY_LINK, profile.link)
                 .apply();
-        refreshProfilesList();
         setStatus("Выбран профиль: " + profile.name);
-        setDetails(profile.carrier + " / " + profile.transport);
+        refreshDynamicUi();
     }
 
-    private void refreshProfilesList() {
-        if (profilesList == null) return;
-        profilesList.removeAllViews();
-
-        List<Profile> profiles = loadProfiles();
-        if (profiles.isEmpty()) {
-            TextView empty = new TextView(this);
-            empty.setText("Профилей пока нет. Нажми +, чтобы добавить olcRTC-ссылку.");
-            empty.setTextColor(Color.parseColor("#7A7F87"));
-            empty.setTextSize(TypedValue.COMPLEX_UNIT_SP, 13);
-            empty.setPadding(0, dp(6), 0, dp(2));
-            profilesList.addView(empty, lpMatchWrapNoMargin());
-            return;
-        }
-
-        for (Profile profile : profiles) {
-            profilesList.addView(profileRow(profile), lpMatchWrap());
-        }
-    }
-
-    private LinearLayout profileRow(Profile profile) {
-        boolean selected = profile.id.equals(selectedProfileId);
-
-        LinearLayout row = new LinearLayout(this);
-        row.setOrientation(LinearLayout.HORIZONTAL);
-        row.setGravity(Gravity.CENTER_VERTICAL);
-        row.setPadding(dp(14), dp(12), dp(12), dp(12));
-        row.setBackground(roundedDrawable(selected ? "#111111" : "#F5F6F8", 18, selected ? null : "#E7E9EE", 1));
-        row.setOnClickListener(v -> selectProfile(profile));
-
-        LinearLayout textWrap = new LinearLayout(this);
-        textWrap.setOrientation(LinearLayout.VERTICAL);
-
-        TextView name = new TextView(this);
-        name.setText(profile.name);
-        name.setTextSize(TypedValue.COMPLEX_UNIT_SP, 15);
-        name.setTypeface(Typeface.DEFAULT_BOLD);
-        name.setTextColor(selected ? Color.WHITE : Color.parseColor("#111111"));
-        textWrap.addView(name, lpMatchWrapNoMargin());
-
-        TextView meta = new TextView(this);
-        meta.setText(profile.carrier + " / " + profile.transport);
-        meta.setTextSize(TypedValue.COMPLEX_UNIT_SP, 12);
-        meta.setTextColor(selected ? Color.parseColor("#D7DBE2") : Color.parseColor("#6F737B"));
-        meta.setPadding(0, dp(5), 0, 0);
-        textWrap.addView(meta, lpMatchWrapNoMargin());
-
-        row.addView(textWrap, new LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f));
-
-        TextView edit = smallRoundButton("i");
-        edit.setTextColor(selected ? Color.parseColor("#111111") : Color.WHITE);
-        edit.setBackground(roundedDrawable(selected ? "#FFFFFF" : "#111111", 18, null, 0));
-        edit.setOnClickListener(v -> openEditProfileEditor(profile));
-        LinearLayout.LayoutParams editLp = squareLp(dp(36));
-        editLp.setMargins(dp(10), 0, 0, 0);
-        row.addView(edit, editLp);
-
-        return row;
+    private void saveProfile(String id, String name, String link) throws Exception {
+        OlcConfig config = OlcUriParser.parse(link);
+        getSharedPreferences(PREFS, MODE_PRIVATE).edit()
+                .putString("profile_" + id + "_link", link)
+                .putString("profile_" + id + "_name", name)
+                .putString("profile_" + id + "_carrier", config.carrier)
+                .putString("profile_" + id + "_transport", config.transport)
+                .apply();
     }
 
     private List<Profile> loadProfiles() {
@@ -630,17 +1010,8 @@ public final class MainActivity extends Activity {
 
     private Profile getSelectedProfile() {
         if (selectedProfileId == null || selectedProfileId.trim().isEmpty()) return null;
-        for (Profile p : loadProfiles()) {
-            if (p.id.equals(selectedProfileId)) return p;
-        }
-        return null;
-    }
-
-    private String findProfileIdByLink(String link) {
-        SharedPreferences prefs = getSharedPreferences(PREFS, MODE_PRIVATE);
-        for (String id : getProfileIds()) {
-            String stored = prefs.getString("profile_" + id + "_link", "");
-            if (link.equals(stored)) return id;
+        for (Profile profile : loadProfiles()) {
+            if (profile.id.equals(selectedProfileId)) return profile;
         }
         return null;
     }
@@ -678,71 +1049,191 @@ public final class MainActivity extends Activity {
         getSharedPreferences(PREFS, MODE_PRIVATE).edit().putString(KEY_PROFILE_IDS, sb.toString()).apply();
     }
 
-    private String buildProfileName(OlcConfig config) {
-        if (config.comment != null && !config.comment.trim().isEmpty() && !"direct".equalsIgnoreCase(config.comment.trim())) {
-            return config.comment.trim();
+    private String findProfileIdByLink(String link) {
+        SharedPreferences prefs = getSharedPreferences(PREFS, MODE_PRIVATE);
+        for (String id : getProfileIds()) {
+            if (link.equals(prefs.getString("profile_" + id + "_link", ""))) return id;
         }
-        String client = config.clientId == null ? "" : config.clientId.trim();
-        if (!client.isEmpty() && !"default".equalsIgnoreCase(client)) {
-            return config.carrier + " | " + config.transport + " | " + client;
-        }
-        return config.carrier + " | " + config.transport;
+        return null;
     }
 
-    private String shortLink(String link) {
-        if (link == null) return "";
-        if (link.length() <= 120) return link;
-        return link.substring(0, 52) + "..." + link.substring(link.length() - 36);
+    private String rewriteTransport(String raw, String transport) {
+        OlcConfig config = OlcUriParser.parse(raw);
+        String uri = extractOlcUri(raw);
+        int q = uri.indexOf('?');
+        int at = uri.indexOf('@', q + 1);
+        if (q <= 0 || at <= q) throw new IllegalArgumentException("bad URI");
+        return uri.substring(0, q + 1) + defaultTransportSpec(config, transport) + uri.substring(at);
     }
 
-    private void hideEditorFocus() {
-        if (linkInput != null) {
-            linkInput.clearFocus();
-            linkInput.setCursorVisible(false);
+    private String rewriteParams(String raw, Map<String, String> edits) {
+        OlcConfig config = OlcUriParser.parse(raw);
+        String uri = extractOlcUri(raw);
+        int q = uri.indexOf('?');
+        int at = uri.indexOf('@', q + 1);
+        if (q <= 0 || at <= q) throw new IllegalArgumentException("bad URI");
+
+        Map<String, String> params = new LinkedHashMap<>(config.params);
+        for (Map.Entry<String, String> entry : edits.entrySet()) {
+            String value = entry.getValue();
+            if (value == null || value.trim().isEmpty()) params.remove(entry.getKey());
+            else params.put(entry.getKey(), value.trim());
         }
-        if (profileNameInput != null) {
-            profileNameInput.clearFocus();
-            profileNameInput.setCursorVisible(false);
+        return uri.substring(0, q + 1) + buildTransportSpec(config.transport, params) + uri.substring(at);
+    }
+
+    private String extractOlcUri(String raw) {
+        String value = raw == null ? "" : raw.trim();
+        int start = value.toLowerCase(Locale.ROOT).indexOf("olcrtc://");
+        if (start >= 0) value = value.substring(start).trim();
+        int cr = value.indexOf('\r');
+        int lf = value.indexOf('\n');
+        int end = -1;
+        if (cr >= 0 && lf >= 0) end = Math.min(cr, lf);
+        else if (cr >= 0) end = cr;
+        else if (lf >= 0) end = lf;
+        return end >= 0 ? value.substring(0, end).trim() : value;
+    }
+
+    private String defaultTransportSpec(OlcConfig base, String transport) {
+        Map<String, String> params = new LinkedHashMap<>();
+        if (OlcUriParser.TRANSPORT_VP8.equals(transport)) {
+            params.put("vp8-fps", "25");
+            params.put("vp8-batch", "4");
+        } else if (OlcUriParser.TRANSPORT_SEI.equals(transport)) {
+            params.put("fps", "30");
+            params.put("batch", "8");
+            params.put("frag", "700");
+            params.put("sei-ack-ms", "10000");
+            params.put("mc-lanes", "12");
+            params.put("liveness-timeout", "60s");
+            params.put("liveness-failures", "3");
+        } else if (OlcUriParser.TRANSPORT_VIDEO.equals(transport)) {
+            params.put("video-codec", "h264");
+            params.put("video-width", "640");
+            params.put("video-height", "360");
+            params.put("video-fps", "15");
+        } else if (!OlcUriParser.TRANSPORT_DATA.equals(transport)) {
+            throw new IllegalArgumentException("unsupported transport: " + transport);
         }
-        try {
-            InputMethodManager imm = (InputMethodManager) getSystemService(INPUT_METHOD_SERVICE);
-            View v = getCurrentFocus();
-            if (imm != null && v != null) imm.hideSoftInputFromWindow(v.getWindowToken(), 0);
-        } catch (Throwable ignored) {}
+        if (base != null && base.params.containsKey("link")) params.put("link", base.params.get("link"));
+        if (base != null && base.params.containsKey("client-id")) params.put("client-id", base.params.get("client-id"));
+        return buildTransportSpec(transport, params);
     }
 
-    private void setStatus(String text) {
-        if (statusView != null) statusView.setText(text);
-    }
-
-    private void setDetails(String text) {
-        if (detailsView != null) detailsView.setText(text);
+    private String buildTransportSpec(String transport, Map<String, String> params) {
+        if (params == null || params.isEmpty()) return transport;
+        StringBuilder sb = new StringBuilder(transport).append("<");
+        boolean first = true;
+        for (Map.Entry<String, String> e : params.entrySet()) {
+            if (e.getKey() == null || e.getKey().trim().isEmpty()) continue;
+            if (!first) sb.append("&");
+            sb.append(e.getKey().trim()).append("=").append(e.getValue() == null ? "" : e.getValue().trim());
+            first = false;
+        }
+        sb.append(">");
+        return sb.toString();
     }
 
     private void applyServiceStatus(String rawStatus) {
+        addRecentEvent(rawStatus);
         setStatus(compactStatus(rawStatus));
         setDetails(shortDetails(rawStatus));
         updateStateFromStatus(rawStatus);
     }
 
+    private void addRecentEvent(String event) {
+        if (event == null || event.trim().isEmpty()) return;
+        String compact = firstLine(event.trim());
+        if (!recentEvents.isEmpty() && recentEvents.get(0).equals(compact)) return;
+        recentEvents.add(0, compact);
+        while (recentEvents.size() > 30) recentEvents.remove(recentEvents.size() - 1);
+    }
+
+    private void updateStateFromStatus(String status) {
+        String s = status == null ? "" : status.toLowerCase(Locale.ROOT);
+        if ("connected".equalsIgnoreCase(telemetryState) || s.contains("vpn connected")) {
+            applyConnectionState(STATE_CONNECTED, "Подключено");
+        } else if ("connecting".equalsIgnoreCase(telemetryState)
+                || "reconnecting".equalsIgnoreCase(telemetryState)
+                || s.contains("olcrtc подключён")
+                || s.contains("подключаю olcrtc")
+                || s.contains("автопереподключение")
+                || s.contains("сеть изменилась")
+                || s.contains("keepalive")) {
+            applyConnectionState(STATE_CONNECTING, "Подключение");
+        } else if (s.contains("ошибка") || s.contains("не выдано") || s.contains("отключаюсь") || s.contains("отключено") || s.contains("stopped")) {
+            applyConnectionState(STATE_DISCONNECTED, "Отключено");
+        }
+    }
+
+    private void applyConnectionState(int state, String subtitle) {
+        connectionState = state;
+        if (toggleButton != null) {
+            if (state == STATE_CONNECTED) {
+                toggleButton.setText("Отключить");
+                toggleButton.setTextColor(Color.WHITE);
+                toggleButton.setBackground(gradientButton());
+            } else if (state == STATE_CONNECTING) {
+                toggleButton.setText("Остановить");
+                toggleButton.setTextColor(Color.parseColor("#E7E7F0"));
+                toggleButton.setBackground(roundedDrawable("#16161F", 16, "#2A2A38", 1));
+            } else {
+                toggleButton.setText("Подключить");
+                toggleButton.setTextColor(Color.WHITE);
+                toggleButton.setBackground(gradientButton());
+            }
+        }
+        if (statusBadge != null && subtitle != null) statusBadge.setText(subtitle);
+    }
+
+    private String statusBadgeText() {
+        String name = !telemetryCarrier.isEmpty() ? telemetryCarrier : selectedProfileCarrier();
+        if (connectionState == STATE_CONNECTED) return "Подключено · " + displayCarrier(name);
+        if (connectionState == STATE_CONNECTING) return "Подключение · " + displayCarrier(name);
+        return "Отключено · " + displayCarrier(name);
+    }
+
+    private String statusDotColor() {
+        if (connectionState == STATE_CONNECTED) return "#00D2FF";
+        if (connectionState == STATE_CONNECTING) return "#6C5CE7";
+        return "#444452";
+    }
+
+    private String selectedProfileCarrier() {
+        Profile selected = getSelectedProfile();
+        return selected == null ? "XLTD" : selected.carrier;
+    }
+
+    private String activeTransportLabel() {
+        String transport = !telemetryTransport.isEmpty() ? telemetryTransport : selectedProfileTransport();
+        if (transport == null || transport.isEmpty()) return "transport: —";
+        if (OlcUriParser.TRANSPORT_SEI.equals(transport)) return "SEI · " + telemetryLanes + " lanes";
+        if (OlcUriParser.TRANSPORT_VP8.equals(transport)) return "VP8";
+        if (OlcUriParser.TRANSPORT_VIDEO.equals(transport)) return "Video";
+        if (OlcUriParser.TRANSPORT_DATA.equals(transport)) return "Data";
+        return transport;
+    }
+
+    private String selectedProfileTransport() {
+        Profile selected = getSelectedProfile();
+        return selected == null ? "" : selected.transport;
+    }
+
     private String compactStatus(String raw) {
         String s = raw == null ? "" : raw.trim();
-        String lower = s.toLowerCase();
-
+        String lower = s.toLowerCase(Locale.ROOT);
         if (lower.contains("vpn connected")) return "VPN подключён. Трафик идёт через туннель.";
         if (lower.contains("отключено")) return "VPN отключён.";
         if (lower.contains("ссылка разобрана")) return "Ссылка принята. Готовлю подключение.";
         if (lower.contains("dns auto")) return "DNS выбран автоматически.";
         if (lower.contains("подключаю olcrtc")) return "Подключаю olcRTC...";
         if (lower.contains("локальный socks")) return "olcRTC подключён. Проверяю локальный SOCKS.";
-        if (lower.contains("olcrtc подключён")) return "olcRTC подключён. Поднимаю VPN.";
+        if (lower.contains("remote connect ok")) return "Серверная сторона отвечает на CONNECT.";
         if (lower.contains("автопереподключение")) return firstLine(s);
         if (lower.contains("сеть изменилась")) return "Сеть изменилась. Пересоздаю туннель.";
-        if (lower.contains("переподключаюсь")) return firstLine(s);
-        if (lower.contains("keepalive fail")) return "Туннель отвечает нестабильно. Проверяю соединение.";
-        if (lower.contains("отключаюсь")) return "Отключаюсь...";
-        if (lower.contains("ошибка")) return humanError(s);
-        if (lower.contains("failed") || lower.contains("exception")) return humanError(s);
+        if (lower.contains("keepalive fail")) return "Туннель отвечает нестабильно.";
+        if (lower.contains("ошибка") || lower.contains("failed") || lower.contains("exception")) return humanError(s);
         return firstLine(s);
     }
 
@@ -751,21 +1242,16 @@ public final class MainActivity extends Activity {
         String s = raw.trim();
         s = s.replaceAll("(?i)(key=)[0-9a-f]{16,}", "$1hidden");
         s = s.replaceAll("(?i)(#)[0-9a-f]{16,}", "$1hidden");
-        if (s.length() > 900) s = s.substring(0, 900) + "\n...";
-        return s;
+        return s.length() > 900 ? s.substring(0, 900) + "\n..." : s;
     }
 
     private String humanError(String raw) {
-        String s = raw == null ? "" : raw.toLowerCase();
-
-        if (s.contains("videochannel") && s.contains("ffmpeg")) return "videochannel требует Android ffmpeg core. Пересобери APK через scripts/build_combo_aar.sh или добавь android-ffmpeg=<path> в ссылку.";
-        if ((s.contains("seichannel") || s.contains("videochannel")) && (s.contains("setseioptions") || s.contains("setvideooptions") || s.contains("startwithtransport") || s.contains("combo aar"))) return "Нужен свежий combo AAR с поддержкой universal-carrier. Собери scripts/build_combo_aar.sh и пересобери APK.";
-        if (s.contains("only datachannel") || s.contains("use datachannel")) return "Эта ссылка не поддерживается этой сборкой. Используй datachannel или vp8channel.";
-        if (s.contains("vp8channel") && (s.contains("no startwithtransport") || s.contains("settransport") || s.contains("rebuild app/libs/olcrtccombo.aar"))) return "Нужен свежий combo AAR с поддержкой vp8channel. Собери scripts/build_combo_aar.sh и пересобери APK.";
+        String s = raw == null ? "" : raw.toLowerCase(Locale.ROOT);
+        if (s.contains("videochannel") && s.contains("ffmpeg")) return "videochannel требует Android ffmpeg core. Пересобери APK через scripts/build_combo_aar.sh.";
+        if ((s.contains("seichannel") || s.contains("videochannel")) && (s.contains("setseioptions") || s.contains("setvideooptions") || s.contains("startwithtransport") || s.contains("combo aar"))) return "Нужен свежий combo AAR с поддержкой universal-carrier.";
         if (s.contains("bad_link") || s.contains("empty olcrtc link")) return "Вставь корректную olcRTC-ссылку.";
         if (s.contains("combined mobile aar") || s.contains("combo aar")) return "Core не найден. Собери combo AAR и пересобери APK.";
         if (s.contains("vpn permission") || s.contains("tun establish") || s.contains("permission not granted")) return "Android не разрешил создать VPN-подключение.";
-        if (s.contains("stream.wb.ru") && (s.contains("lookup") || s.contains("dns"))) return "DNS не смог найти stream.wb.ru. Проверь сеть или попробуй переподключиться.";
         if (s.contains("ice failed") || s.contains("olcrtc core stopped")) return "Канал olcRTC оборвался. Приложение попробует переподключиться.";
         if (s.contains("keepalive failed") || s.contains("keepalive fail")) return "Туннель перестал отвечать. Переподключаюсь.";
         if (s.contains("remote not ready") || s.contains("host unreachable") || s.contains("timeout")) return "Удалённая сторона не ответила. Попробую переподключиться.";
@@ -773,55 +1259,68 @@ public final class MainActivity extends Activity {
         return "Ошибка подключения. Детали ниже.";
     }
 
-    private String firstLine(String s) {
-        if (s == null || s.trim().isEmpty()) return "";
-        String line = s.trim().split("\\r?\\n", 2)[0].trim();
-        return line.length() > 120 ? line.substring(0, 120) + "..." : line;
+    private String tagForEvent(String event) {
+        String s = event == null ? "" : event.toLowerCase(Locale.ROOT);
+        if (s.contains("vpn connected") || s.contains("connect ok") || s.contains("подключён")) return "OK";
+        if (s.contains("dns")) return "DNS";
+        if (s.contains("tun") || s.contains("vpn")) return "TUN";
+        if (s.contains("ошибка") || s.contains("fail") || s.contains("timeout")) return "WARN";
+        return "LOG";
     }
 
-    private String safe(String s) {
-        return s == null ? "" : s;
+    private int tagColor(String tag) {
+        if ("OK".equals(tag)) return Color.parseColor("#00D2FF");
+        if ("WARN".equals(tag)) return Color.parseColor("#E17055");
+        if ("DNS".equals(tag)) return Color.parseColor("#6C5CE7");
+        return Color.parseColor("#66667A");
     }
 
-    private void updateStateFromStatus(String status) {
-        String s = status == null ? "" : status.toLowerCase();
-        if (s.contains("vpn connected")) {
-            applyConnectionState(STATE_CONNECTED, "Подключено");
-        } else if (s.contains("olcrtc подключён") || s.contains("подключаю olcrtc") || s.contains("автопереподключение") || s.contains("запускаю") || s.contains("ссылка разобрана") || s.contains("сеть изменилась") || s.contains("keepalive")) {
-            applyConnectionState(STATE_CONNECTING, "Подключение...");
-        } else if (s.contains("ошибка") || s.contains("не выдано") || s.contains("отключаюсь") || s.contains("отключено") || s.contains("отключение отправлено") || s.contains("stopped")) {
-            applyConnectionState(STATE_DISCONNECTED, "Отключено");
+    private String compactEvent(String event) {
+        String s = firstLine(event);
+        return s.length() > 110 ? s.substring(0, 110) + "..." : s;
+    }
+
+    private String buildProfileName(OlcConfig config) {
+        if (config.comment != null && !config.comment.trim().isEmpty() && !"direct".equalsIgnoreCase(config.comment.trim())) return config.comment.trim();
+        if (config.clientId != null && !config.clientId.trim().isEmpty() && !"default".equalsIgnoreCase(config.clientId.trim())) return config.carrier + " | " + config.transport + " | " + config.clientId;
+        return config.carrier + " | " + config.transport;
+    }
+
+    private String lanesLabel(String link) {
+        try {
+            OlcConfig config = OlcUriParser.parse(link);
+            int lanes = lanesFor(config);
+            return lanes > 1 ? lanes + " lanes" : "single lane";
+        } catch (Exception ignored) {
+            return "unknown";
         }
     }
 
-    private void applyConnectionState(int state, String subtitle) {
-        connectionState = state;
-        if (heroSubtitle != null && !TextUtils.isEmpty(subtitle)) heroSubtitle.setText(subtitle);
+    private int lanesFor(OlcConfig config) {
+        if (config == null || !OlcUriParser.TRANSPORT_SEI.equals(config.transport)) return 1;
+        return Math.max(1, config.intParam("mc-lanes", config.intParam("sei-lanes", config.intParam("lanes", 1))));
+    }
 
-        if (stateChip != null) {
-            if (state == STATE_CONNECTED) {
-                stateChip.setText("Connected");
-                stateChip.setTextColor(Color.parseColor("#0A0A0A"));
-                stateChip.setBackground(roundedDrawable("#D7F8DD", 16, null, 0));
-            } else if (state == STATE_CONNECTING) {
-                stateChip.setText("Connecting");
-                stateChip.setTextColor(Color.parseColor("#0A0A0A"));
-                stateChip.setBackground(roundedDrawable("#E8ECF6", 16, null, 0));
-            } else {
-                stateChip.setText("Disconnected");
-                stateChip.setTextColor(Color.parseColor("#5B616B"));
-                stateChip.setBackground(roundedDrawable("#F0F2F5", 16, null, 0));
-            }
+    private void setStatus(String text) {
+        if (statusView != null) statusView.setText(text);
+        if (text != null && !text.trim().isEmpty()) {
+            addRecentEvent(text);
+            refreshEvents();
         }
+    }
 
-        if (toggleButton != null) {
-            if (state == STATE_CONNECTED) {
-                toggleButton.setText("Отключить");
-            } else if (state == STATE_CONNECTING) {
-                toggleButton.setText("Остановить");
-            } else {
-                toggleButton.setText("Подключить");
-            }
+    private void setDetails(String text) {
+        if (detailsView != null) detailsView.setText(text == null ? "" : text);
+    }
+
+    private void hideEditorFocus() {
+        if (linkInput != null) linkInput.clearFocus();
+        if (profileNameInput != null) profileNameInput.clearFocus();
+        try {
+            InputMethodManager imm = (InputMethodManager) getSystemService(INPUT_METHOD_SERVICE);
+            View view = getCurrentFocus();
+            if (imm != null && view != null) imm.hideSoftInputFromWindow(view.getWindowToken(), 0);
+        } catch (Throwable ignored) {
         }
     }
 
@@ -851,72 +1350,87 @@ public final class MainActivity extends Activity {
             setStatus("Подтверди отключение энергосбережения для стабильного VPN.");
         } catch (Throwable t) {
             try {
-                Intent intent = new Intent(Settings.ACTION_IGNORE_BATTERY_OPTIMIZATION_SETTINGS);
-                startActivity(intent);
-                setStatus("Открой olcRTC VPN и отключи оптимизацию батареи вручную.");
+                startActivity(new Intent(Settings.ACTION_IGNORE_BATTERY_OPTIMIZATION_SETTINGS));
             } catch (Throwable ignored) {
                 setStatus("Не удалось открыть настройки батареи.");
             }
         }
     }
 
-    private TextView sectionLabel(String text) {
-        TextView view = new TextView(this);
-        view.setText(text);
-        view.setTextColor(Color.parseColor("#6F737B"));
-        view.setTextSize(TypedValue.COMPLEX_UNIT_SP, 12);
+    private TextView sectionTitle(String text) {
+        TextView view = smallMono(text);
+        view.setTextColor(Color.parseColor("#55556A"));
         view.setTypeface(Typeface.DEFAULT_BOLD);
         return view;
     }
 
-    private TextView primaryButton(String text) {
+    private TextView smallMono(String text) {
+        TextView view = new TextView(this);
+        view.setText(text);
+        view.setTextSize(TypedValue.COMPLEX_UNIT_SP, 10);
+        view.setTypeface(Typeface.MONOSPACE);
+        return view;
+    }
+
+    private TextView bodyText(String text) {
+        TextView view = new TextView(this);
+        view.setText(text);
+        view.setTextColor(Color.parseColor("#CFCFDB"));
+        view.setTextSize(TypedValue.COMPLEX_UNIT_SP, 13);
+        view.setLineSpacing(0f, 1.15f);
+        return view;
+    }
+
+    private TextView smallText(String text) {
+        TextView view = new TextView(this);
+        view.setText(text);
+        view.setTextColor(Color.parseColor("#66667A"));
+        view.setTextSize(TypedValue.COMPLEX_UNIT_SP, 11);
+        view.setLineSpacing(0f, 1.15f);
+        return view;
+    }
+
+    private TextView smallAction(String text) {
+        TextView view = smallMono(text);
+        view.setTextColor(Color.parseColor("#6C5CE7"));
+        view.setPadding(dp(8), dp(5), dp(8), dp(5));
+        view.setClickable(true);
+        return view;
+    }
+
+    private TextView primarySmallButton(String text) {
         TextView b = new TextView(this);
         b.setText(text);
+        b.setGravity(Gravity.CENTER);
         b.setTextColor(Color.WHITE);
-        b.setTextSize(TypedValue.COMPLEX_UNIT_SP, 16);
-        b.setTypeface(Typeface.DEFAULT_BOLD);
-        b.setGravity(Gravity.CENTER);
-        b.setPadding(dp(16), dp(18), dp(16), dp(18));
-        b.setBackground(roundedDrawable("#111111", 22, null, 0));
-        b.setClickable(true);
-        return b;
-    }
-
-    private TextView secondaryTextButton(String text) {
-        TextView b = new TextView(this);
-        b.setText(text);
-        b.setTextColor(Color.parseColor("#111111"));
         b.setTextSize(TypedValue.COMPLEX_UNIT_SP, 14);
-        b.setGravity(Gravity.CENTER);
-        b.setPadding(dp(14), dp(15), dp(14), dp(15));
-        b.setBackground(roundedDrawable("#F0F2F5", 18, "#E7E9EE", 1));
-        b.setClickable(true);
-        return b;
-    }
-
-    private TextView actionButton(String text) {
-        TextView b = secondaryTextButton(text);
-        b.setTextSize(TypedValue.COMPLEX_UNIT_SP, 14);
-        return b;
-    }
-
-    private TextView smallRoundButton(String text) {
-        TextView b = new TextView(this);
-        b.setText(text);
-        b.setTextColor(Color.WHITE);
-        b.setTextSize(TypedValue.COMPLEX_UNIT_SP, 20);
         b.setTypeface(Typeface.DEFAULT_BOLD);
-        b.setGravity(Gravity.CENTER);
-        b.setBackground(roundedDrawable("#111111", 18, null, 0));
+        b.setPadding(dp(14), dp(12), dp(14), dp(12));
+        b.setBackground(gradientButton());
         b.setClickable(true);
         return b;
     }
 
-    private LinearLayout cardLayout() {
+    private TextView secondarySmallButton(String text) {
+        TextView b = primarySmallButton(text);
+        b.setTextColor(Color.parseColor("#D7D2FF"));
+        b.setBackground(roundedDrawable("#16161F", 14, "#2A2A38", 1));
+        return b;
+    }
+
+    private LinearLayout card() {
         LinearLayout layout = new LinearLayout(this);
         layout.setOrientation(LinearLayout.VERTICAL);
-        layout.setBackground(roundedDrawable("#FFFFFF", 24, "#E9EBEF", 1));
+        layout.setPadding(dp(14), dp(14), dp(14), dp(14));
+        layout.setBackground(roundedDrawable("#16161F", 16, "#2A2A38", 1));
         return layout;
+    }
+
+    private LinearLayout row() {
+        LinearLayout row = new LinearLayout(this);
+        row.setOrientation(LinearLayout.HORIZONTAL);
+        row.setGravity(Gravity.CENTER_VERTICAL);
+        return row;
     }
 
     private GradientDrawable roundedDrawable(String fillColor, int radiusDp, String strokeColor, int strokeDp) {
@@ -927,13 +1441,22 @@ public final class MainActivity extends Activity {
         return drawable;
     }
 
-    private int dp(int value) {
-        return Math.round(value * getResources().getDisplayMetrics().density);
+    private GradientDrawable gradientButton() {
+        GradientDrawable drawable = new GradientDrawable(GradientDrawable.Orientation.LEFT_RIGHT, new int[]{
+                Color.parseColor("#6C5CE7"),
+                Color.parseColor("#00D2FF")
+        });
+        drawable.setCornerRadius(dp(16));
+        return drawable;
+    }
+
+    private LinearLayout.LayoutParams navLp() {
+        return new LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f);
     }
 
     private LinearLayout.LayoutParams lpMatchWrap() {
         LinearLayout.LayoutParams lp = lpMatchWrapNoMargin();
-        lp.setMargins(0, dp(8), 0, dp(8));
+        lp.setMargins(0, dp(6), 0, dp(6));
         return lp;
     }
 
@@ -945,13 +1468,75 @@ public final class MainActivity extends Activity {
         return new LinearLayout.LayoutParams(ViewGroup.LayoutParams.WRAP_CONTENT, ViewGroup.LayoutParams.WRAP_CONTENT);
     }
 
-    private LinearLayout.LayoutParams rowTextButtonLp(float weight) {
-        LinearLayout.LayoutParams lp = new LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, weight);
-        lp.setMargins(dp(3), 0, dp(3), 0);
-        return lp;
+    private LinearLayout.LayoutParams fixedWidth(int width) {
+        return new LinearLayout.LayoutParams(width, ViewGroup.LayoutParams.WRAP_CONTENT);
     }
 
-    private LinearLayout.LayoutParams squareLp(int size) {
-        return new LinearLayout.LayoutParams(size, size);
+    private int dp(int value) {
+        return Math.round(value * getResources().getDisplayMetrics().density);
+    }
+
+    private String text(EditText edit) {
+        return edit == null ? "" : edit.getText().toString().trim();
+    }
+
+    private String safe(String s) {
+        return s == null ? "" : s;
+    }
+
+    private String firstLine(String s) {
+        if (s == null || s.trim().isEmpty()) return "";
+        String line = s.trim().split("\\r?\\n", 2)[0].trim();
+        return line.length() > 140 ? line.substring(0, 140) + "..." : line;
+    }
+
+    private String displayCarrier(String carrier) {
+        if (carrier == null || carrier.trim().isEmpty()) return "XLTD";
+        if ("mtslink".equalsIgnoreCase(carrier)) return "MTS Link";
+        return carrier;
+    }
+
+    private String currentShortTime() {
+        java.text.SimpleDateFormat fmt = new java.text.SimpleDateFormat("HH:mm", Locale.US);
+        return fmt.format(new java.util.Date());
+    }
+
+    private String formatUptime(long ms) {
+        long sec = Math.max(0L, ms / 1000L);
+        long h = sec / 3600L;
+        long m = (sec % 3600L) / 60L;
+        long s = sec % 60L;
+        if (h > 0) return String.format(Locale.US, "%d:%02d", h, m);
+        return String.format(Locale.US, "%d:%02d", m, s);
+    }
+
+    private String formatRate(long bps) {
+        double value = Math.max(0L, bps);
+        if (value >= 1024 * 1024) return String.format(Locale.US, "%.1f MB/s", value / 1024d / 1024d);
+        if (value >= 1024) return String.format(Locale.US, "%.0f KB/s", value / 1024d);
+        return Math.round(value) + " B/s";
+    }
+
+    private String formatBytes(long bytes) {
+        ByteLabel label = splitBytes(bytes);
+        return label.value + " " + label.unit;
+    }
+
+    private ByteLabel splitBytes(long bytes) {
+        double value = Math.max(0L, bytes);
+        if (value >= 1024d * 1024d * 1024d) return new ByteLabel(String.format(Locale.US, "%.1f", value / 1024d / 1024d / 1024d), "GB");
+        if (value >= 1024d * 1024d) return new ByteLabel(String.format(Locale.US, "%.1f", value / 1024d / 1024d), "MB");
+        if (value >= 1024d) return new ByteLabel(String.format(Locale.US, "%.0f", value / 1024d), "KB");
+        return new ByteLabel(String.valueOf(Math.round(value)), "B");
+    }
+
+    private static final class ByteLabel {
+        final String value;
+        final String unit;
+
+        ByteLabel(String value, String unit) {
+            this.value = value;
+            this.unit = unit;
+        }
     }
 }

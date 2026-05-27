@@ -298,8 +298,8 @@ public final class OlcMobileBridge {
         if (config == null || !"mtslink".equalsIgnoreCase(config.carrier)) return;
 
         int intervalMs = durationParam(config, 20000, "liveness-interval", "live-interval");
-        int timeoutMs = durationParam(config, 15000, "liveness-timeout", "live-timeout");
-        int failures = config.intParam("liveness-failures", config.intParam("live-failures", 6));
+        int timeoutMs = durationParam(config, 60000, "liveness-timeout", "live-timeout");
+        int failures = config.intParam("liveness-failures", config.intParam("live-failures", 3));
         setLivenessOptionsIfAvailable(intervalMs, timeoutMs, failures);
 
         int payloadFloor = mtsLinkPayloadFloor(config);
