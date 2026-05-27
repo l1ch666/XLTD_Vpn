@@ -1,0 +1,51 @@
+{
+  "name": "xltd-vpn",
+  "version": "0.6.0-beta",
+  "description": "XLTD VPN Windows Client (Electron)",
+  "main": "main.js",
+  "scripts": {
+    "start": "electron .",
+    "build": "electron-builder --win --x64 --publish never"
+  },
+  "devDependencies": {
+    "electron": "^35.7.5",
+    "electron-builder": "^25.1.8"
+  },
+  "build": {
+    "appId": "com.xltd.vpn",
+    "productName": "XLTD VPN",
+    "copyright": "XLTD VPN",
+    "win": {
+      "target": [
+        {
+          "target": "portable",
+          "arch": [
+            "x64"
+          ]
+        }
+      ],
+      "icon": "assets/icon.ico",
+      "requestedExecutionLevel": "asInvoker"
+    },
+    "extraResources": [
+      {
+        "from": "../tools",
+        "to": "tools",
+        "filter": [
+          "**/*"
+        ]
+      }
+    ],
+    "files": [
+      "main.js",
+      "preload.js",
+      "renderer/**/*",
+      "services/**/*",
+      "assets/**/*",
+      "package.json"
+    ],
+    "directories": {
+      "output": "../dist-electron"
+    }
+  }
+}
