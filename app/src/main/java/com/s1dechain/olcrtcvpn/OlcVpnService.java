@@ -55,6 +55,9 @@ public final class OlcVpnService extends VpnService {
     private static final int VP8_TCP_DIAL_LIMIT = 2;
     private static final int STARTUP_TIMEOUT_MS = 22000;
     private static final int VP8_STARTUP_TIMEOUT_MS = 30000;
+    // SEI multipath with mtslink can take 40-60 s for mc-min-ready lanes to bootstrap.
+    // Give the Go runtime enough runway so Java doesn't race and kill the attempt.
+    private static final int SEI_STARTUP_TIMEOUT_MS = 65000;
     private static final long VP8_STABILIZE_MS = 3500L;
     private static final int LOCAL_SOCKS_PROBE_ATTEMPTS = 8;
     private static final int LOCAL_SOCKS_PROBE_TIMEOUT_MS = 2500;
@@ -222,14 +225,20 @@ public final class OlcVpnService extends VpnService {
                 sendStatus("Android video runtime ready: ffmpeg " + ffmpegPath);
             }
             olc.startWithConfig(config, SOCKS_PORT, "", "");
-            olc.waitReady(isVisualTransport(config) ? VP8_STARTUP_TIMEOUT_MS : STARTUP_TIMEOUT_MS);
+            // SEI needs its own, longer timeout because mtslink multipath bootstraps many lanes in parallel.
+            int startupTimeout = isSei(config) ? SEI_STARTUP_TIMEOUT_MS
+                    : (isVisualTransport(config) ? VP8_STARTUP_TIMEOUT_MS : STARTUP_TIMEOUT_MS);
+            olc.waitReady(startupTimeout);
             sendStatus("olcRTC подключён. Проверяю локальный SOCKS 127.0.0.1:" + SOCKS_PORT);
 
             if (!waitForLocalSocksReady()) {
                 throw new IllegalStateException("local SOCKS is not ready");
             }
 
-            if (isVisualTransport(config)) {
+            // VP8 and video need a short stabilise pause after WaitReady so the media pipeline
+            // settles before the first SOCKS CONNECT. SEI's data channel is ready immediately
+            // after WaitReady, so no pause is needed (and it would only waste time).
+            if (needsRtcStabilize(config)) {
                 if (isVp8(config) && vp8Batch(config) <= 1) {
                     sendStatus("VP8 batch=1: режим совместим с этой ссылкой, но для реального VPN лучше перезапустить server/link с vp8-batch=4 или 64.");
                 }
@@ -568,17 +577,32 @@ public final class OlcVpnService extends VpnService {
         return config != null && OlcUriParser.TRANSPORT_VIDEO.equals(config.transport);
     }
 
+    /** Returns true for transports that use a live video media track (VP8 / video codec). */
     private boolean isVisualTransport(OlcConfig config) {
-        return isVp8(config) || isSei(config) || isVideo(config);
+        return isVp8(config) || isVideo(config);
+    }
+
+    /**
+     * Returns true when the transport needs a brief post-WaitReady pause to let the WebRTC
+     * media pipeline settle before the first SOCKS CONNECT goes out.
+     * VP8 / video use a live media track and benefit from this delay.
+     * SEI uses a data channel that is immediately usable after WaitReady.
+     */
+    private boolean needsRtcStabilize(OlcConfig config) {
+        return isVp8(config) || isVideo(config);
     }
 
     private int mtuForTransport(OlcConfig config) {
+        // SEI runs over a data channel and can handle full Ethernet MTU; only real video
+        // transports need the reduced VP8_MTU to avoid carrier fragmentation pain.
         int fallback = isVisualTransport(config) ? VP8_MTU : DATA_MTU;
         int requested = config == null ? fallback : config.intParam("mtu", fallback);
         return clampInt(requested, 900, DATA_MTU);
     }
 
     private int tcpDialLimitForTransport(OlcConfig config) {
+        // SEI + datachannel can easily sustain 8 parallel TCP dials just like datachannel.
+        // Only visual transports (VP8/video) need the stricter 2-dial limit.
         int fallback = isVisualTransport(config) ? VP8_TCP_DIAL_LIMIT : DATA_TCP_DIAL_LIMIT;
         int requested = config == null ? fallback : config.intParam("tcp-limit", fallback);
         return clampInt(requested, 1, 32);
@@ -642,7 +666,12 @@ public final class OlcVpnService extends VpnService {
     }
 
     private boolean waitForRemoteConnectReady(OlcConfig config) {
-        int attempts = isVisualTransport(config) ? VP8_REMOTE_PROBE_ATTEMPTS : DATA_REMOTE_PROBE_ATTEMPTS;
+        // VP8 and SEI both use many probes; datachannel converges quickly so fewer are needed.
+        // SEI multipath may still be routing through a freshly-opened lane on the first try.
+        int attempts = (isVisualTransport(config) || isSei(config)) ? VP8_REMOTE_PROBE_ATTEMPTS : DATA_REMOTE_PROBE_ATTEMPTS;
+        // Between probes: for VP8/video give the media pipeline breathing room; SEI/data can
+        // retry sooner since the underlying channel is already up.
+        long probeIntervalMs = isVisualTransport(config) ? 1200 : 700;
         for (int i = 1; i <= attempts && !stopRequested; i++) {
             for (String target : REMOTE_CONNECT_PROBE_TARGETS) {
                 if (runLocalSocksConnectProbe(target, REMOTE_PROBE_TIMEOUT_MS)) {
@@ -650,8 +679,8 @@ public final class OlcVpnService extends VpnService {
                     return true;
                 }
             }
-            sendStatus("Remote CONNECT ещё не готов " + i + "/" + attempts + ". Жду без запуска TUN, чтобы Android не зафлудил VP8 канал...");
-            try { Thread.sleep(isVisualTransport(config) ? 1200 : 700); } catch (InterruptedException ignored) {}
+            sendStatus("Remote CONNECT ещё не готов " + i + "/" + attempts + ". Жду без запуска TUN...");
+            try { Thread.sleep(probeIntervalMs); } catch (InterruptedException ignored) {}
         }
         return false;
     }

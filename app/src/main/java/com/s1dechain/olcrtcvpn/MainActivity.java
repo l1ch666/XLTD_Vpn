@@ -51,10 +51,10 @@ public final class MainActivity extends Activity {
     private static final int STATE_CONNECTING = 1;
     private static final int STATE_CONNECTED = 2;
 
-    // Palette: one source of truth for the Revolut-style dark theme. Update here
+    // Palette: one source of truth for the dark-violet theme. Update here
     // to retheme the whole UI; avoid scattering Color.parseColor("...") literals.
-    private static final int COLOR_BG = 0xFF0D0D14;
-    private static final int COLOR_SURFACE_DARK = 0xFF16161F;
+    private static final int COLOR_BG = 0xFF13121A;          // v2: deeper violet-black per design
+    private static final int COLOR_SURFACE_DARK = 0xFF1A1928; // v2: violet-tinted card surface
     private static final int COLOR_SURFACE_LINE = 0xFF2A2A38;
     private static final int COLOR_BORDER_DIM = 0xFF3E3E50;
     private static final int COLOR_BORDER = 0xFF444456;
@@ -75,16 +75,17 @@ public final class MainActivity extends Activity {
 
     private LinearLayout content;
     private LinearLayout bottomNav;
-    private TextView homeNav;
-    private TextView profilesNav;
-    private TextView trafficNav;
-    private TextView settingsNav;
+    private View homeNav;
+    private View profilesNav;
+    private View trafficNav;
+    private View settingsNav;
 
     private TextView statusBadge;
     private TextView statusDot;
-    private TextView sessionAmount;
-    private TextView sessionUnit;
-    private TextView sessionSub;
+    private TextView sessionAmount;   // hero: speed value e.g. "1.84"
+    private TextView sessionUnit;     // hero: unit + direction e.g. "↓  MB/s"
+    private TextView sessionSub;      // hero: context line "mtslink · SEI · 12 lanes · 74 ms"
+    private TextView sessionPill;     // hero: session pill "Сессия 12.4 MB · 0:42"
     private TextView toggleButton;
     private LinearLayout chipBar;
     private TextView rxValue;
@@ -252,8 +253,9 @@ public final class MainActivity extends Activity {
 
         bottomNav = new LinearLayout(this);
         bottomNav.setOrientation(LinearLayout.HORIZONTAL);
-        bottomNav.setPadding(dp(10), dp(8), dp(10), dp(8));
-        bottomNav.setBackground(roundedDrawable("#101018", 0, "#1A1A24", 1));
+        bottomNav.setPadding(dp(10), dp(8), dp(10), dp(10));
+        // Use the same dark-violet background as the screen, with a hairline top border
+        bottomNav.setBackground(roundedDrawable("#13121A", 0, "#2A2A3E", 1));
         root.addView(bottomNav, new LinearLayout.LayoutParams(
                 ViewGroup.LayoutParams.MATCH_PARENT,
                 ViewGroup.LayoutParams.WRAP_CONTENT
@@ -276,6 +278,7 @@ public final class MainActivity extends Activity {
         eventLog = null;
         statusView = null;
         detailsView = null;
+        sessionPill = null;
         mtuInput = null;
         fpsInput = null;
         batchInput = null;
@@ -358,13 +361,14 @@ public final class MainActivity extends Activity {
         LinearLayout hero = new LinearLayout(this);
         hero.setOrientation(LinearLayout.VERTICAL);
         hero.setGravity(Gravity.CENTER_HORIZONTAL);
-        hero.setPadding(0, dp(12), 0, dp(14));
+        hero.setPadding(0, dp(12), 0, dp(10));
 
+        // ── Status badge: dot + connection state label ──────────────────────
         LinearLayout badge = new LinearLayout(this);
         badge.setOrientation(LinearLayout.HORIZONTAL);
         badge.setGravity(Gravity.CENTER_VERTICAL);
-        badge.setPadding(dp(9), dp(6), dp(12), dp(6));
-        badge.setBackground(roundedDrawable("#1C1C26", 20, "#2A2A38", 1));
+        badge.setPadding(dp(9), dp(5), dp(12), dp(5));
+        badge.setBackground(roundedDrawable("#1C1B2A", 20, "#2A2A3E", 1));
 
         statusDot = new TextView(this);
         statusDot.setText(" ");
@@ -376,33 +380,66 @@ public final class MainActivity extends Activity {
         statusBadge = new TextView(this);
         statusBadge.setTextColor(COLOR_TEXT_LABEL);
         statusBadge.setTextSize(TypedValue.COMPLEX_UNIT_SP, 11);
+        statusBadge.setTypeface(Typeface.create(Typeface.SANS_SERIF, Typeface.NORMAL));
         badge.addView(statusBadge, lpWrapWrapNoMargin());
         hero.addView(badge, lpWrapWrapNoMargin());
 
-        LinearLayout amountRow = new LinearLayout(this);
-        amountRow.setGravity(Gravity.CENTER);
-        amountRow.setPadding(0, dp(12), 0, 0);
+        // ── Speed hero: "↓" arrow + large number + unit ────────────────────
+        // Design spec: "↓ 1.84 MB/s" as primary metric — speed is more
+        // informative than accumulated bytes while actively connected.
+        LinearLayout speedRow = new LinearLayout(this);
+        speedRow.setGravity(Gravity.CENTER | Gravity.BOTTOM);
+        speedRow.setPadding(0, dp(14), 0, 0);
+
+        // Direction arrow (muted, baseline-aligned with unit, not the number)
+        TextView arrowLabel = new TextView(this);
+        arrowLabel.setText("↓");
+        arrowLabel.setTextColor(COLOR_TEXT_MUTED);
+        arrowLabel.setTextSize(TypedValue.COMPLEX_UNIT_SP, 20);
+        arrowLabel.setTypeface(Typeface.MONOSPACE);
+        arrowLabel.setIncludeFontPadding(false);
+        LinearLayout.LayoutParams arrowLp = lpWrapWrapNoMargin();
+        arrowLp.setMargins(0, 0, dp(5), dp(6));
+        speedRow.addView(arrowLabel, arrowLp);
+
+        // Speed value: the big number (font weight via MONOSPACE for crisp digits)
         sessionAmount = new TextView(this);
         sessionAmount.setTextColor(COLOR_TEXT);
-        sessionAmount.setTextSize(TypedValue.COMPLEX_UNIT_SP, 44);
+        sessionAmount.setTextSize(TypedValue.COMPLEX_UNIT_SP, 52);
         sessionAmount.setTypeface(Typeface.create(Typeface.MONOSPACE, Typeface.NORMAL));
         sessionAmount.setIncludeFontPadding(false);
-        amountRow.addView(sessionAmount, lpWrapWrapNoMargin());
+        speedRow.addView(sessionAmount, lpWrapWrapNoMargin());
 
+        // Unit label (e.g. "MB/s"), baseline aligned beside the number
         sessionUnit = new TextView(this);
-        sessionUnit.setTextColor(COLOR_TEXT_MUTED);
-        sessionUnit.setTextSize(TypedValue.COMPLEX_UNIT_SP, 16);
+        sessionUnit.setTextColor(COLOR_TEXT_DIM);
+        sessionUnit.setTextSize(TypedValue.COMPLEX_UNIT_SP, 17);
         sessionUnit.setTypeface(Typeface.MONOSPACE);
+        sessionUnit.setIncludeFontPadding(false);
         LinearLayout.LayoutParams unitLp = lpWrapWrapNoMargin();
-        unitLp.setMargins(dp(5), dp(14), 0, 0);
-        amountRow.addView(sessionUnit, unitLp);
-        hero.addView(amountRow, lpWrapWrapNoMargin());
+        unitLp.setMargins(dp(6), 0, 0, dp(8));
+        speedRow.addView(sessionUnit, unitLp);
+        hero.addView(speedRow, lpWrapWrapNoMargin());
 
+        // ── Context line: "mtslink · SEI · 12 lanes · 74 ms" ──────────────
         sessionSub = new TextView(this);
-        sessionSub.setText("передано за сессию");
-        sessionSub.setTextColor(COLOR_TEXT_MUTED);
+        sessionSub.setTextColor(COLOR_TEXT_DIM);
         sessionSub.setTextSize(TypedValue.COMPLEX_UNIT_SP, 12);
-        hero.addView(sessionSub, lpWrapWrapNoMargin());
+        sessionSub.setTypeface(Typeface.SANS_SERIF);
+        LinearLayout.LayoutParams ctxLp = lpWrapWrapNoMargin();
+        ctxLp.setMargins(0, dp(3), 0, 0);
+        hero.addView(sessionSub, ctxLp);
+
+        // ── Session pill: "Сессия 12.4 MB · 0:42" ─────────────────────────
+        sessionPill = new TextView(this);
+        sessionPill.setTextColor(COLOR_TEXT_MUTED);
+        sessionPill.setTextSize(TypedValue.COMPLEX_UNIT_SP, 11);
+        sessionPill.setTypeface(Typeface.SANS_SERIF);
+        sessionPill.setPadding(dp(10), dp(4), dp(10), dp(4));
+        sessionPill.setBackground(roundedDrawable("#1C1B2A", 12, "#2A2A3E", 1));
+        LinearLayout.LayoutParams pillLp = lpWrapWrapNoMargin();
+        pillLp.setMargins(0, dp(8), 0, 0);
+        hero.addView(sessionPill, pillLp);
         return hero;
     }
 
@@ -494,7 +531,7 @@ public final class MainActivity extends Activity {
         LinearLayout card = new LinearLayout(this);
         card.setOrientation(LinearLayout.VERTICAL);
         card.setPadding(dp(12), dp(10), dp(12), dp(10));
-        card.setBackground(roundedDrawable("#16161F", 12, "#2A2A38", 1));
+        card.setBackground(roundedDrawable("#1A1928", 12, "#2A2A3E", 1));
 
         TextView l = smallMono(label);
         l.setTextColor(COLOR_TEXT_MUTED);
@@ -675,7 +712,7 @@ public final class MainActivity extends Activity {
         input.setHintTextColor(COLOR_TEXT_MUTED);
         input.setTextSize(TypedValue.COMPLEX_UNIT_SP, 14);
         input.setPadding(dp(12), dp(10), dp(12), dp(10));
-        input.setBackground(roundedDrawable("#101018", 12, "#2A2A38", 1));
+        input.setBackground(roundedDrawable("#13121A", 12, "#2A2A3E", 1));
         parent.addView(input, lpMatchWrap());
         return input;
     }
@@ -699,49 +736,62 @@ public final class MainActivity extends Activity {
     private void renderBottomNav() {
         if (bottomNav == null) return;
         bottomNav.removeAllViews();
-        homeNav = navItem("Главная", TAB_HOME);
-        profilesNav = navItem("Профили", TAB_PROFILES);
-        trafficNav = navItem("Трафик", TAB_TRAFFIC);
-        settingsNav = navItem("Настройки", TAB_SETTINGS);
+        homeNav = navItem("Главная", TAB_HOME, NavIconView.ICON_HOME);
+        profilesNav = navItem("Профили", TAB_PROFILES, NavIconView.ICON_PROFILES);
+        trafficNav = navItem("Трафик", TAB_TRAFFIC, NavIconView.ICON_TRAFFIC);
+        settingsNav = navItem("Настройки", TAB_SETTINGS, NavIconView.ICON_SETTINGS);
         bottomNav.addView(homeNav, navLp());
         bottomNav.addView(profilesNav, navLp());
         bottomNav.addView(trafficNav, navLp());
         bottomNav.addView(settingsNav, navLp());
     }
 
-    private TextView navItem(String label, int tab) {
-        TextView nav = new TextView(this);
-        nav.setText(navIcon(tab) + "\n" + label.toUpperCase(Locale.ROOT));
-        nav.setGravity(Gravity.CENTER);
-        nav.setTextSize(TypedValue.COMPLEX_UNIT_SP, 9);
-        nav.setTypeface(Typeface.DEFAULT_BOLD);
-        nav.setTextColor(tab == activeTab ? COLOR_PRIMARY : COLOR_BORDER);
-        nav.setLineSpacing(0f, 0.95f);
-        nav.setPadding(dp(4), dp(8), dp(4), dp(8));
-        nav.setOnClickListener(v -> {
+    private LinearLayout navItem(String label, int tab, int iconType) {
+        boolean active = (tab == activeTab);
+        int color = active ? COLOR_PRIMARY : COLOR_BORDER;
+
+        LinearLayout item = new LinearLayout(this);
+        item.setOrientation(LinearLayout.VERTICAL);
+        item.setGravity(Gravity.CENTER);
+        item.setPadding(dp(4), dp(8), dp(4), dp(8));
+        item.setClickable(true);
+        item.setFocusable(true);
+        item.setOnClickListener(v -> {
             activeTab = tab;
             renderActiveTab();
         });
-        return nav;
-    }
 
-    private String navIcon(int tab) {
-        if (tab == TAB_HOME) return "◇";
-        if (tab == TAB_PROFILES) return "≡";
-        if (tab == TAB_TRAFFIC) return "↕";
-        return "⚙";
+        // SVG-style line icon (1.5 dp stroke, rounded caps) — design spec v2
+        NavIconView icon = new NavIconView(this);
+        icon.setIconType(iconType);
+        icon.setColor(color);
+        LinearLayout.LayoutParams iconLp = new LinearLayout.LayoutParams(dp(22), dp(20));
+        iconLp.setMargins(0, 0, 0, dp(3));
+        item.addView(icon, iconLp);
+
+        TextView text = new TextView(this);
+        text.setText(label.toUpperCase(Locale.ROOT));
+        text.setGravity(Gravity.CENTER);
+        text.setTextSize(TypedValue.COMPLEX_UNIT_SP, 8);
+        text.setTypeface(Typeface.DEFAULT_BOLD);
+        text.setTextColor(color);
+        text.setIncludeFontPadding(false);
+        item.addView(text, lpWrapWrapNoMargin());
+        return item;
     }
 
     private void refreshDynamicUi() {
         applyConnectionState(connectionState, null);
         if (statusBadge != null) statusBadge.setText(statusBadgeText());
         if (statusDot != null) statusDot.setBackground(roundedDrawable(statusDotColor(), 8, null, 0));
+        // Hero: show download speed as the primary metric (design v2)
         if (sessionAmount != null) {
-            ByteLabel bytes = splitBytes(sessionRxBytes + sessionTxBytes);
-            sessionAmount.setText(bytes.value);
-            if (sessionUnit != null) sessionUnit.setText(bytes.unit);
+            ByteLabel speed = formatSpeedHero(rxBps);
+            sessionAmount.setText(speed.value);
+            if (sessionUnit != null) sessionUnit.setText(speed.unit);
         }
-        if (sessionSub != null) sessionSub.setText(connectionState == STATE_CONNECTED ? "передано за сессию" : "ожидание подключения");
+        if (sessionSub != null) sessionSub.setText(heroContextLine());
+        if (sessionPill != null) sessionPill.setText(sessionPillText());
         if (rxValue != null) rxValue.setText(formatRate(rxBps));
         if (txValue != null) txValue.setText(formatRate(txBps));
         if (latencyValue != null) latencyValue.setText(probeLatencyMs >= 0 ? probeLatencyMs + " ms" : "— ms");
@@ -761,7 +811,7 @@ public final class MainActivity extends Activity {
             View child = chipBar.getChildAt(i);
             String transport = String.valueOf(child.getTag());
             boolean on = transport.equals(active);
-            child.setBackground(roundedDrawable(on ? "#1E1E2E" : "#16161F", 20, on ? "#6C5CE7" : "#2A2A38", 1));
+            child.setBackground(roundedDrawable(on ? "#221F38" : "#1A1928", 20, on ? "#6C5CE7" : "#2A2A3E", 1));
             if (child instanceof ViewGroup) {
                 ViewGroup group = (ViewGroup) child;
                 for (int j = 0; j < group.getChildCount(); j++) {
@@ -796,7 +846,7 @@ public final class MainActivity extends Activity {
         row.setOrientation(LinearLayout.HORIZONTAL);
         row.setGravity(Gravity.CENTER_VERTICAL);
         row.setPadding(dp(10), dp(9), dp(10), dp(9));
-        row.setBackground(roundedDrawable("#16161F", 14, selected ? "#383850" : "#2A2A38", 1));
+        row.setBackground(roundedDrawable("#1A1928", 14, selected ? "#38384E" : "#2A2A3E", 1));
         row.setOnClickListener(v -> selectProfile(profile));
 
         TextView active = new TextView(this);
@@ -812,7 +862,7 @@ public final class MainActivity extends Activity {
         icon.setTextColor(COLOR_PRIMARY_LIGHT);
         icon.setTextSize(TypedValue.COMPLEX_UNIT_SP, 16);
         icon.setIncludeFontPadding(false);
-        icon.setBackground(roundedDrawable("#1C1C26", 10, null, 0));
+        icon.setBackground(roundedDrawable("#1C1B2A", 10, null, 0));
         LinearLayout.LayoutParams iconLp = new LinearLayout.LayoutParams(dp(32), dp(32));
         iconLp.setMargins(0, 0, dp(10), 0);
         row.addView(icon, iconLp);
@@ -872,7 +922,7 @@ public final class MainActivity extends Activity {
         tagView.setTextColor(tagColor(tag));
         tagView.setGravity(Gravity.CENTER);
         tagView.setPadding(dp(5), dp(2), dp(5), dp(2));
-        tagView.setBackground(roundedDrawable("#1C1C26", 5, null, 0));
+        tagView.setBackground(roundedDrawable("#1C1B2A", 5, null, 0));
         LinearLayout.LayoutParams tagLp = lpWrapWrapNoMargin();
         tagLp.setMargins(0, 0, dp(8), 0);
         row.addView(tagView, tagLp);
@@ -921,7 +971,7 @@ public final class MainActivity extends Activity {
         edit.setHintTextColor(COLOR_TEXT_MUTED);
         edit.setTextSize(TypedValue.COMPLEX_UNIT_SP, 14);
         edit.setPadding(dp(12), dp(12), dp(12), dp(12));
-        edit.setBackground(roundedDrawable("#101018", 12, "#2A2A38", 1));
+        edit.setBackground(roundedDrawable("#13121A", 12, "#2A2A3E", 1));
         edit.setInputType(multiline
                 ? InputType.TYPE_CLASS_TEXT | InputType.TYPE_TEXT_FLAG_MULTI_LINE | InputType.TYPE_TEXT_FLAG_NO_SUGGESTIONS
                 : InputType.TYPE_CLASS_TEXT | InputType.TYPE_TEXT_FLAG_NO_SUGGESTIONS);
@@ -1311,7 +1361,7 @@ public final class MainActivity extends Activity {
             } else if (state == STATE_CONNECTING) {
                 toggleButton.setText("Остановить");
                 toggleButton.setTextColor(COLOR_TEXT_BRIGHT);
-                toggleButton.setBackground(roundedDrawable("#16161F", 16, "#2A2A38", 1));
+                toggleButton.setBackground(roundedDrawable("#1A1928", 16, "#2A2A3E", 1));
             } else {
                 toggleButton.setText("Подключить");
                 toggleButton.setTextColor(Color.WHITE);
@@ -1616,7 +1666,7 @@ public final class MainActivity extends Activity {
     private TextView secondarySmallButton(String text) {
         TextView b = primarySmallButton(text);
         b.setTextColor(COLOR_PRIMARY_PALE);
-        b.setBackground(roundedDrawable("#16161F", 14, "#2A2A38", 1));
+        b.setBackground(roundedDrawable("#1A1928", 14, "#2A2A3E", 1));
         return b;
     }
 
@@ -1624,7 +1674,7 @@ public final class MainActivity extends Activity {
         LinearLayout layout = new LinearLayout(this);
         layout.setOrientation(LinearLayout.VERTICAL);
         layout.setPadding(dp(14), dp(14), dp(14), dp(14));
-        layout.setBackground(roundedDrawable("#16161F", 16, "#2A2A38", 1));
+        layout.setBackground(roundedDrawable("#1A1928", 16, "#2A2A3E", 1));
         return layout;
     }
 
@@ -1777,6 +1827,169 @@ public final class MainActivity extends Activity {
         ByteLabel(String value, String unit) {
             this.value = value;
             this.unit = unit;
+        }
+    }
+
+    // ── Hero helpers (design v2) ──────────────────────────────────────────────
+
+    /**
+     * Format download speed for the hero display with 2 decimal places for MB/s,
+     * whole number for KB/s, and bare bytes for very slow connections.
+     */
+    private ByteLabel formatSpeedHero(long bps) {
+        double v = Math.max(0, bps);
+        if (v >= 1024d * 1024d) return new ByteLabel(String.format(Locale.US, "%.2f", v / 1024d / 1024d), "MB/s");
+        if (v >= 1024d)         return new ByteLabel(String.format(Locale.US, "%.0f", v / 1024d), "KB/s");
+        return new ByteLabel(String.valueOf(Math.round(v)), "B/s");
+    }
+
+    /**
+     * Single-line context string shown under the speed hero when connected:
+     * "MTS Link · SEI · 12 lanes · 74 ms"
+     * Falls back to short state labels while disconnected/connecting.
+     */
+    private String heroContextLine() {
+        if (connectionState == STATE_DISCONNECTED) return "отключено";
+        if (connectionState == STATE_CONNECTING)   return "подключение...";
+        StringBuilder sb = new StringBuilder();
+        if (!telemetryCarrier.isEmpty())
+            sb.append(displayCarrier(telemetryCarrier)).append(" · ");
+        if (!telemetryTransport.isEmpty())
+            sb.append(telemetryTransport.toLowerCase(Locale.ROOT)).append(" · ");
+        if (telemetryLanes > 1)
+            sb.append(telemetryLanes).append(" lanes · ");
+        if (probeLatencyMs >= 0)
+            sb.append(probeLatencyMs).append(" ms");
+        String result = sb.toString();
+        while (result.endsWith(" · ")) result = result.substring(0, result.length() - 3);
+        return result.isEmpty() ? "подключено" : result;
+    }
+
+    /**
+     * Small pill text showing total session traffic and uptime.
+     * "Сессия 12.4 MB · 0:42"
+     */
+    private String sessionPillText() {
+        if (connectionState != STATE_CONNECTED) return "нет сессии";
+        long total = sessionRxBytes + sessionTxBytes;
+        return "Сессия " + formatBytes(total) + " · " + formatUptime(uptimeMs);
+    }
+
+    // ── SVG-style bottom nav icon (design v2) ────────────────────────────────
+
+    /**
+     * Canvas-drawn line icon with 1.5 dp stroke width and rounded caps/joins,
+     * matching the style spec from the design HTML (same family as rabbit mascot).
+     */
+    private static final class NavIconView extends android.view.View {
+        static final int ICON_HOME     = 0;
+        static final int ICON_PROFILES = 1;
+        static final int ICON_TRAFFIC  = 2;
+        static final int ICON_SETTINGS = 3;
+
+        private final android.graphics.Paint paint = new android.graphics.Paint(android.graphics.Paint.ANTI_ALIAS_FLAG);
+        private int iconType = ICON_HOME;
+        private int color    = 0xFF444456;
+
+        NavIconView(android.content.Context ctx) {
+            super(ctx);
+            paint.setStyle(android.graphics.Paint.Style.STROKE);
+            paint.setStrokeCap(android.graphics.Paint.Cap.ROUND);
+            paint.setStrokeJoin(android.graphics.Paint.Join.ROUND);
+        }
+
+        void setIconType(int type)  { iconType = type; invalidate(); }
+        void setColor(int c)        { color    = c;    invalidate(); }
+
+        @Override
+        protected void onDraw(android.graphics.Canvas canvas) {
+            super.onDraw(canvas);
+            float d  = getResources().getDisplayMetrics().density;
+            paint.setStrokeWidth(1.5f * d);
+            paint.setColor(color);
+            float w = getWidth(), h = getHeight();
+            float cx = w * 0.5f, cy = h * 0.5f;
+            float s  = Math.min(w, h) * 0.78f;
+            float l = cx - s * 0.5f, r = cx + s * 0.5f;
+            float t = cy - s * 0.5f, b = cy + s * 0.5f;
+
+            switch (iconType) {
+                case ICON_HOME:     drawHome(canvas, l, t, r, b, d); break;
+                case ICON_PROFILES: drawProfiles(canvas, l, t, r, b); break;
+                case ICON_TRAFFIC:  drawTraffic(canvas, l, t, r, b, d); break;
+                case ICON_SETTINGS: drawSettings(canvas, l, t, r, b, d); break;
+            }
+        }
+
+        private void drawHome(android.graphics.Canvas cv, float l, float t, float r, float b, float d) {
+            float cx = (l + r) * 0.5f;
+            float roofBase = t + (b - t) * 0.46f;
+            float bodyL = l + (r - l) * 0.13f;
+            float bodyR = r - (r - l) * 0.13f;
+            // Roof triangle
+            android.graphics.Path p = new android.graphics.Path();
+            p.moveTo(l, roofBase); p.lineTo(cx, t); p.lineTo(r, roofBase);
+            cv.drawPath(p, paint);
+            // Body left + bottom + right (open top)
+            android.graphics.Path body = new android.graphics.Path();
+            body.moveTo(bodyL, roofBase); body.lineTo(bodyL, b);
+            body.lineTo(bodyR, b);       body.lineTo(bodyR, roofBase);
+            cv.drawPath(body, paint);
+            // Door slot
+            float dw = (r - l) * 0.16f;
+            float doorT = b - (b - roofBase) * 0.48f;
+            android.graphics.Path door = new android.graphics.Path();
+            door.moveTo(cx - dw, b); door.lineTo(cx - dw, doorT);
+            door.lineTo(cx + dw, doorT); door.lineTo(cx + dw, b);
+            cv.drawPath(door, paint);
+        }
+
+        private void drawProfiles(android.graphics.Canvas cv, float l, float t, float r, float b) {
+            float mid = (t + b) * 0.5f;
+            float gap = (b - t) * 0.27f;
+            // Three lines, each slightly shorter than the previous (left-to-right trim)
+            cv.drawLine(l, mid - gap, r, mid - gap, paint);
+            cv.drawLine(l, mid,       r - (r - l) * 0.22f, mid, paint);
+            cv.drawLine(l, mid + gap, r - (r - l) * 0.44f, mid + gap, paint);
+        }
+
+        private void drawTraffic(android.graphics.Canvas cv, float l, float t, float r, float b, float d) {
+            float cxL = l + (r - l) * 0.30f;
+            float cxR = l + (r - l) * 0.70f;
+            float ah  = (b - t) * 0.55f;
+            float hw  = (r - l) * 0.14f;   // arrowhead half-width
+            float hh  = ah * 0.36f;         // arrowhead height
+            float top = (t + b) * 0.5f - ah * 0.5f;
+            float bot = (t + b) * 0.5f + ah * 0.5f;
+            // Up arrow
+            cv.drawLine(cxL, bot, cxL, top, paint);
+            cv.drawLine(cxL, top, cxL - hw, top + hh, paint);
+            cv.drawLine(cxL, top, cxL + hw, top + hh, paint);
+            // Down arrow
+            cv.drawLine(cxR, top, cxR, bot, paint);
+            cv.drawLine(cxR, bot, cxR - hw, bot - hh, paint);
+            cv.drawLine(cxR, bot, cxR + hw, bot - hh, paint);
+        }
+
+        private void drawSettings(android.graphics.Canvas cv, float l, float t, float r, float b, float d) {
+            float mid = (t + b) * 0.5f;
+            float gap = (b - t) * 0.26f;
+            float kr  = (b - t) * 0.13f; // knob radius
+            // Top track with knob at 65%
+            float k1x = l + (r - l) * 0.65f;
+            cv.drawLine(l, mid - gap, k1x - kr, mid - gap, paint);
+            cv.drawLine(k1x + kr, mid - gap, r, mid - gap, paint);
+            // Knob: temporarily fill for solid dot
+            paint.setStyle(android.graphics.Paint.Style.FILL);
+            cv.drawCircle(k1x, mid - gap, kr, paint);
+            paint.setStyle(android.graphics.Paint.Style.STROKE);
+            // Bottom track with knob at 32%
+            float k2x = l + (r - l) * 0.32f;
+            cv.drawLine(l, mid + gap, k2x - kr, mid + gap, paint);
+            cv.drawLine(k2x + kr, mid + gap, r, mid + gap, paint);
+            paint.setStyle(android.graphics.Paint.Style.FILL);
+            cv.drawCircle(k2x, mid + gap, kr, paint);
+            paint.setStyle(android.graphics.Paint.Style.STROKE);
         }
     }
 }

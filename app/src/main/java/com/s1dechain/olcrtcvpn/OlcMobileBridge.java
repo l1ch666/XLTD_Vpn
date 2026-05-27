@@ -190,11 +190,14 @@ public final class OlcMobileBridge {
             return;
         }
         if (OlcUriParser.TRANSPORT_SEI.equals(transport)) {
-            boolean isMtsLink = "mtslink".equalsIgnoreCase(config.carrier);
-            int fps = config.intParam("fps", config.intParam("sei-fps", isMtsLink ? 30 : 60));
-            int batch = config.intParam("batch", config.intParam("sei-batch", isMtsLink ? 8 : 64));
-            int frag = config.intParam("frag", config.intParam("sei-frag", isMtsLink ? 700 : 900));
-            int ackMs = config.intParam("ack-ms", config.intParam("sei-ack-ms", isMtsLink ? 10000 : 2000));
+            // Use the same conservative defaults regardless of carrier. mtslink SEI needs small
+            // batch (8) and long ack (10000 ms) to survive the higher-latency MTS Link path;
+            // these values are also safe for every other carrier, so there is no reason to vary
+            // them. Explicit link params (fps=, batch=, frag=, ack-ms=) always win.
+            int fps   = config.intParam("fps",    config.intParam("sei-fps",    30));
+            int batch = config.intParam("batch",  config.intParam("sei-batch",   8));
+            int frag  = config.intParam("frag",   config.intParam("sei-frag",  700));
+            int ackMs = config.intParam("ack-ms", config.intParam("sei-ack-ms", 10000));
             setSEIOptionsIfAvailable(fps, batch, frag, ackMs);
             applyCarrierRuntimeOptions(config);
             return;
