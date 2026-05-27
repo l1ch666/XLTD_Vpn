@@ -168,7 +168,8 @@ internal sealed class MainForm : Form
             ForeColor = C_TEXT,
             TextAlign = ContentAlignment.MiddleLeft,
             Dock      = DockStyle.Fill,
-            Padding   = new Padding(18, 0, 0, 0)
+            Padding   = new Padding(18, 0, 0, 0),
+            BackColor = Color.Transparent
         };
         var ver = new Label
         {
@@ -178,7 +179,8 @@ internal sealed class MainForm : Form
             TextAlign = ContentAlignment.BottomLeft,
             Dock      = DockStyle.Bottom,
             Height    = 18,
-            Padding   = new Padding(22, 0, 0, 4)
+            Padding   = new Padding(22, 0, 0, 4),
+            BackColor = Color.Transparent
         };
         logoPanel.Controls.Add(logo);
         logoPanel.Controls.Add(ver);
@@ -271,24 +273,28 @@ internal sealed class MainForm : Form
         heroStateLabel.Height    = 26;
         heroStateLabel.Font      = new Font("Segoe UI", 10f, FontStyle.Bold);
         heroStateLabel.ForeColor = C_TEXT_MUT;
+        heroStateLabel.BackColor = Color.Transparent;
         left.Controls.Add(heroStateLabel);
 
         heroSpeedLabel.Dock      = DockStyle.Top;
         heroSpeedLabel.Height    = 52;
         heroSpeedLabel.Font      = new Font("Segoe UI Semibold", 30f, FontStyle.Bold);
         heroSpeedLabel.ForeColor = C_TEXT;
+        heroSpeedLabel.BackColor = Color.Transparent;
         left.Controls.Add(heroSpeedLabel);
 
         heroCtxLabel.Dock      = DockStyle.Top;
         heroCtxLabel.Height    = 22;
         heroCtxLabel.Font      = new Font("Segoe UI", 9f);
         heroCtxLabel.ForeColor = C_TEXT_DIM;
+        heroCtxLabel.BackColor = Color.Transparent;
         left.Controls.Add(heroCtxLabel);
 
         heroPillLabel.Dock      = DockStyle.Top;
         heroPillLabel.Height    = 20;
         heroPillLabel.Font      = new Font("Segoe UI", 8.5f);
         heroPillLabel.ForeColor = C_TEXT_MUT;
+        heroPillLabel.BackColor = Color.Transparent;
         left.Controls.Add(heroPillLabel);
 
         layout.Controls.Add(left, 0, 0);
@@ -325,7 +331,7 @@ internal sealed class MainForm : Form
         profilesList.Dock          = DockStyle.Fill;
         profilesList.IntegralHeight = false;
         profilesList.BorderStyle   = BorderStyle.None;
-        profilesList.BackColor     = Color.Transparent;
+        profilesList.BackColor     = C_SURFACE;   // ListBox does not support Color.Transparent
         profilesList.ForeColor     = C_TEXT;
         profilesList.DrawMode      = DrawMode.OwnerDrawFixed;
         profilesList.ItemHeight    = 52;
@@ -342,7 +348,7 @@ internal sealed class MainForm : Form
         miniLog.Dock      = DockStyle.Fill;
         miniLog.ReadOnly  = true;
         miniLog.BorderStyle = BorderStyle.None;
-        miniLog.BackColor = Color.Transparent;
+        miniLog.BackColor = C_SURFACE;   // RichTextBox does not support Color.Transparent
         miniLog.ForeColor = C_TEXT_DIM;
         miniLog.Font      = new Font("Consolas", 8.5f);
         miniLog.ScrollBars = RichTextBoxScrollBars.Vertical;
@@ -389,7 +395,8 @@ internal sealed class MainForm : Form
             Font      = new Font("Segoe UI", 8.5f),
             Dock      = DockStyle.Right,
             AutoSize  = true,
-            TextAlign = ContentAlignment.MiddleRight
+            TextAlign = ContentAlignment.MiddleRight,
+            BackColor = Color.Transparent
         };
         layout.Controls.Add(hint, 1, 0);
         return panel;
@@ -501,7 +508,7 @@ internal sealed class MainForm : Form
         logBox.Dock       = DockStyle.Fill;
         logBox.ReadOnly   = true;
         logBox.BorderStyle = BorderStyle.None;
-        logBox.BackColor  = Color.Transparent;
+        logBox.BackColor  = C_SURFACE;   // RichTextBox does not support Color.Transparent
         logBox.ForeColor  = C_TEXT_DIM;
         logBox.Font       = new Font("Consolas", 9f);
         logBox.ScrollBars = RichTextBoxScrollBars.Vertical;
@@ -518,13 +525,15 @@ internal sealed class MainForm : Form
         {
             Text = title, Dock = DockStyle.Top, Height = 18,
             Font = new Font("Segoe UI", 7.5f, FontStyle.Bold),
-            ForeColor = C_TEXT_MUT
+            ForeColor = C_TEXT_MUT,
+            BackColor = Color.Transparent
         });
         var value = new Label
         {
             Text = "—", Dock = DockStyle.Top, Height = 36,
             Font = new Font("Cascadia Code", 18f),
-            ForeColor = C_TEXT
+            ForeColor = C_TEXT,
+            BackColor = Color.Transparent
         };
         card.Controls.Add(value);
         value.BringToFront();
@@ -549,7 +558,8 @@ internal sealed class MainForm : Form
         {
             Text = "Маршрутизация (выбрать до подключения):",
             Dock = DockStyle.Top, Height = 24,
-            ForeColor = C_TEXT_DIM, Font = new Font("Segoe UI", 9.5f)
+            ForeColor = C_TEXT_DIM, Font = new Font("Segoe UI", 9.5f),
+            BackColor = Color.Transparent
         };
         card.Controls.Add(hint);
 
@@ -584,7 +594,8 @@ internal sealed class MainForm : Form
                 : "⚠ Full Tunnel требует прав администратора.",
             ForeColor = WindowsTunnelManager.IsAdministrator() ? C_OK : C_WARN,
             Font      = new Font("Segoe UI", 9f),
-            Dock      = DockStyle.Top, Height = 24
+            Dock      = DockStyle.Top, Height = 24,
+            BackColor = Color.Transparent
         };
         card.Controls.Add(adminHint);
     }
@@ -600,7 +611,7 @@ internal sealed class MainForm : Form
         logBox.Dock       = DockStyle.Fill;
         logBox.ReadOnly   = true;
         logBox.BorderStyle = BorderStyle.None;
-        logBox.BackColor  = Color.Transparent;
+        logBox.BackColor  = C_SURFACE;   // RichTextBox does not support Color.Transparent
         logBox.ForeColor  = C_TEXT_DIM;
         logBox.Font       = new Font("Consolas", 9f);
         logBox.ScrollBars = RichTextBoxScrollBars.Vertical;
@@ -904,7 +915,8 @@ internal sealed class MainForm : Form
             Dock      = DockStyle.Top,
             Height    = 24,
             Font      = new Font("Segoe UI", 8f, FontStyle.Bold),
-            ForeColor = Color.FromArgb(0x55, 0x55, 0x6A)
+            ForeColor = Color.FromArgb(0x55, 0x55, 0x6A),
+            BackColor = Color.Transparent
         };
     }
 
@@ -917,6 +929,7 @@ internal sealed class MainForm : Form
             Text = title, Dock = DockStyle.Left, AutoSize = true,
             Font = new Font("Segoe UI", 8f, FontStyle.Bold),
             ForeColor = Color.FromArgb(0x55, 0x55, 0x6A),
+            BackColor = Color.Transparent,
             TextAlign = ContentAlignment.MiddleLeft
         };
         row.Controls.Add(lbl);
@@ -927,6 +940,7 @@ internal sealed class MainForm : Form
                 Text = action, Dock = DockStyle.Right, AutoSize = true,
                 Font = new Font("Segoe UI", 8.5f),
                 ForeColor = Color.FromArgb(0x6C, 0x5C, 0xE7),
+                BackColor = Color.Transparent,
                 TextAlign = ContentAlignment.MiddleRight,
                 Cursor = Cursors.Hand
             };
