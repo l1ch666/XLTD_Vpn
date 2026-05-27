@@ -297,10 +297,21 @@ public final class OlcMobileBridge {
     private void applyCarrierRuntimeOptions(OlcConfig config) throws Exception {
         if (config == null || !"mtslink".equalsIgnoreCase(config.carrier)) return;
 
+        // Liveness applies regardless of transport — the control channel exists
+        // on every mtslink carrier path.
         int intervalMs = durationParam(config, 20000, "liveness-interval", "live-interval");
         int timeoutMs = durationParam(config, 60000, "liveness-timeout", "live-timeout");
         int failures = config.intParam("liveness-failures", config.intParam("live-failures", 3));
         setLivenessOptionsIfAvailable(intervalMs, timeoutMs, failures);
+
+        // Traffic shaping (max payload, min/max delay) is calibrated against the
+        // SEI fragment size and must NOT be applied to videochannel / vp8channel:
+        // an H.264 access unit produced by videochannel routinely exceeds the
+        // ~5600-byte payloadFloor and would be truncated by the crypto layer.
+        // Multipath lanes are also SEI-specific.
+        if (!OlcUriParser.TRANSPORT_SEI.equalsIgnoreCase(config.transport)) {
+            return;
+        }
 
         int payloadFloor = mtsLinkPayloadFloor(config);
         int maxPayload = config.intParam("traffic-max-payload", config.intParam("traffic-max-payload-size", payloadFloor));
@@ -311,15 +322,13 @@ public final class OlcMobileBridge {
         int maxDelayMs = durationParam(config, 18, "traffic-max-delay");
         setTrafficOptionsIfAvailable(maxPayload, minDelayMs, maxDelayMs);
 
-        if (OlcUriParser.TRANSPORT_SEI.equalsIgnoreCase(config.transport)) {
-            int lanes = config.intParam("mc-lanes", config.intParam("sei-lanes", config.intParam("lanes", 1)));
-            if (lanes > 1) {
-                int controlLanes = config.intParam("mc-control-lanes", 1);
-                int parallel = config.intParam("mc-connect-parallel", config.intParam("mc-connect-parallelism", 2));
-                int minReady = config.intParam("mc-min-ready", Math.min(4, lanes));
-                int maxStreams = config.intParam("mc-max-streams-per-lane", 3);
-                setMultipathOptionsIfAvailable(lanes, controlLanes, parallel, minReady, maxStreams);
-            }
+        int lanes = config.intParam("mc-lanes", config.intParam("sei-lanes", config.intParam("lanes", 1)));
+        if (lanes > 1) {
+            int controlLanes = config.intParam("mc-control-lanes", 1);
+            int parallel = config.intParam("mc-connect-parallel", config.intParam("mc-connect-parallelism", 2));
+            int minReady = config.intParam("mc-min-ready", Math.min(4, lanes));
+            int maxStreams = config.intParam("mc-max-streams-per-lane", 3);
+            setMultipathOptionsIfAvailable(lanes, controlLanes, parallel, minReady, maxStreams);
         }
     }
 

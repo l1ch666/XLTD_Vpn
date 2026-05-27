@@ -51,6 +51,28 @@ public final class MainActivity extends Activity {
     private static final int STATE_CONNECTING = 1;
     private static final int STATE_CONNECTED = 2;
 
+    // Palette: one source of truth for the Revolut-style dark theme. Update here
+    // to retheme the whole UI; avoid scattering Color.parseColor("...") literals.
+    private static final int COLOR_BG = 0xFF0D0D14;
+    private static final int COLOR_SURFACE_DARK = 0xFF16161F;
+    private static final int COLOR_SURFACE_LINE = 0xFF2A2A38;
+    private static final int COLOR_BORDER_DIM = 0xFF3E3E50;
+    private static final int COLOR_BORDER = 0xFF444456;
+    private static final int COLOR_TEXT_MUTED = 0xFF55556A;
+    private static final int COLOR_TEXT_DIM = 0xFF66667A;
+    private static final int COLOR_TEXT_LABEL = 0xFF7E7E92;
+    private static final int COLOR_TEXT_SECONDARY = 0xFFCCCCD8;
+    private static final int COLOR_TEXT_TERTIARY = 0xFFCFCFDB;
+    private static final int COLOR_TEXT_BRIGHT = 0xFFE7E7F0;
+    private static final int COLOR_TEXT = 0xFFF0F0F8;
+    private static final int COLOR_PRIMARY = 0xFF6C5CE7;
+    private static final int COLOR_PRIMARY_LIGHT = 0xFFA89FF5;
+    private static final int COLOR_PRIMARY_PALE = 0xFFD7D2FF;
+    private static final int COLOR_PRIMARY_DEEP = 0xFF5B4FD6;
+    private static final int COLOR_SEI = 0xFF00D2FF;
+    private static final int COLOR_VP8 = 0xFFE17055;
+    private static final int COLOR_VIDEO = 0xFF5B8CFF;
+
     private LinearLayout content;
     private LinearLayout bottomNav;
     private TextView homeNav;
@@ -211,7 +233,7 @@ public final class MainActivity extends Activity {
     private void buildUi() {
         LinearLayout root = new LinearLayout(this);
         root.setOrientation(LinearLayout.VERTICAL);
-        root.setBackgroundColor(Color.parseColor("#0D0D14"));
+        root.setBackgroundColor(COLOR_BG);
 
         ScrollView scroll = new ScrollView(this);
         scroll.setFillViewport(false);
@@ -305,7 +327,7 @@ public final class MainActivity extends Activity {
     }
 
     private void buildTrafficTab() {
-        content.addView(titleBlock("Трафик", "Сессия, скорость, задержка и последние события"), lpMatchWrapNoMargin());
+        content.addView(titleBlock("Трафик ≈", "Скорость считается через TrafficStats и включает фоновый трафик приложения (зонды, DNS, HTTP-пинги), поэтому значения приблизительные."), lpMatchWrapNoMargin());
         content.addView(buildMetricsGrid(), lpMatchWrapNoMargin());
         content.addView(buildTrafficSummary(), lpMatchWrap());
         content.addView(buildEventPanel(12), lpMatchWrap());
@@ -323,11 +345,11 @@ public final class MainActivity extends Activity {
         row.setPadding(0, dp(4), 0, dp(8));
 
         TextView app = smallMono("XLTD VPN");
-        app.setTextColor(Color.parseColor("#55556A"));
+        app.setTextColor(COLOR_TEXT_MUTED);
         row.addView(app, new LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f));
 
         TextView speed = smallMono("↓ " + formatRate(rxBps));
-        speed.setTextColor(Color.parseColor("#66667A"));
+        speed.setTextColor(COLOR_TEXT_DIM);
         row.addView(speed, lpWrapWrapNoMargin());
         return row;
     }
@@ -352,7 +374,7 @@ public final class MainActivity extends Activity {
         badge.addView(statusDot, dotLp);
 
         statusBadge = new TextView(this);
-        statusBadge.setTextColor(Color.parseColor("#7E7E92"));
+        statusBadge.setTextColor(COLOR_TEXT_LABEL);
         statusBadge.setTextSize(TypedValue.COMPLEX_UNIT_SP, 11);
         badge.addView(statusBadge, lpWrapWrapNoMargin());
         hero.addView(badge, lpWrapWrapNoMargin());
@@ -361,14 +383,14 @@ public final class MainActivity extends Activity {
         amountRow.setGravity(Gravity.CENTER);
         amountRow.setPadding(0, dp(12), 0, 0);
         sessionAmount = new TextView(this);
-        sessionAmount.setTextColor(Color.parseColor("#F0F0F8"));
+        sessionAmount.setTextColor(COLOR_TEXT);
         sessionAmount.setTextSize(TypedValue.COMPLEX_UNIT_SP, 44);
         sessionAmount.setTypeface(Typeface.create(Typeface.MONOSPACE, Typeface.NORMAL));
         sessionAmount.setIncludeFontPadding(false);
         amountRow.addView(sessionAmount, lpWrapWrapNoMargin());
 
         sessionUnit = new TextView(this);
-        sessionUnit.setTextColor(Color.parseColor("#55556A"));
+        sessionUnit.setTextColor(COLOR_TEXT_MUTED);
         sessionUnit.setTextSize(TypedValue.COMPLEX_UNIT_SP, 16);
         sessionUnit.setTypeface(Typeface.MONOSPACE);
         LinearLayout.LayoutParams unitLp = lpWrapWrapNoMargin();
@@ -378,7 +400,7 @@ public final class MainActivity extends Activity {
 
         sessionSub = new TextView(this);
         sessionSub.setText("передано за сессию");
-        sessionSub.setTextColor(Color.parseColor("#55556A"));
+        sessionSub.setTextColor(COLOR_TEXT_MUTED);
         sessionSub.setTextSize(TypedValue.COMPLEX_UNIT_SP, 12);
         hero.addView(sessionSub, lpWrapWrapNoMargin());
         return hero;
@@ -418,8 +440,14 @@ public final class MainActivity extends Activity {
         chip.setOrientation(LinearLayout.HORIZONTAL);
         chip.setGravity(Gravity.CENTER);
         chip.setPadding(dp(10), dp(6), dp(10), dp(6));
-        chip.setClickable(false);
+        chip.setClickable(true);
+        chip.setFocusable(true);
         chip.setTag(transport);
+        chip.setOnClickListener(v -> {
+            String target = (String) v.getTag();
+            if (target == null || target.isEmpty()) return;
+            switchSelectedTransport(target);
+        });
 
         View dot = new View(this);
         dot.setTag("dot");
@@ -469,19 +497,19 @@ public final class MainActivity extends Activity {
         card.setBackground(roundedDrawable("#16161F", 12, "#2A2A38", 1));
 
         TextView l = smallMono(label);
-        l.setTextColor(Color.parseColor("#55556A"));
+        l.setTextColor(COLOR_TEXT_MUTED);
         card.addView(l, lpMatchWrapNoMargin());
 
         TextView v = new TextView(this);
         v.setText(value);
-        v.setTextColor(Color.parseColor("#F0F0F8"));
+        v.setTextColor(COLOR_TEXT);
         v.setTextSize(TypedValue.COMPLEX_UNIT_SP, 18);
         v.setTypeface(Typeface.MONOSPACE);
         v.setPadding(0, dp(3), 0, 0);
         card.addView(v, lpMatchWrapNoMargin());
 
         TextView d = smallMono(delta);
-        d.setTextColor(Color.parseColor("#6C5CE7"));
+        d.setTextColor(COLOR_PRIMARY);
         d.setPadding(0, dp(2), 0, 0);
         card.addView(d, lpMatchWrapNoMargin());
         if (rxValue == null) rxDelta = d;
@@ -536,7 +564,7 @@ public final class MainActivity extends Activity {
         statusView = bodyText("Готов.");
         card.addView(statusView, lpMatchWrapNoMargin());
         detailsView = smallMono("Технические детали появятся после запуска.");
-        detailsView.setTextColor(Color.parseColor("#66667A"));
+        detailsView.setTextColor(COLOR_TEXT_DIM);
         detailsView.setPadding(0, dp(8), 0, 0);
         card.addView(detailsView, lpMatchWrapNoMargin());
         return card;
@@ -582,22 +610,44 @@ public final class MainActivity extends Activity {
 
         card.addView(sectionTitle(selected.name), lpMatchWrapNoMargin());
         card.addView(smallText(config.carrier + " / " + config.transport + " / lanes=" + lanesFor(config)), lpMatchWrap());
+
+        boolean isSei = OlcUriParser.TRANSPORT_SEI.equalsIgnoreCase(config.transport);
+        boolean isVp8 = OlcUriParser.TRANSPORT_VP8.equalsIgnoreCase(config.transport);
+        boolean isMtsLink = "mtslink".equalsIgnoreCase(config.carrier);
+
+        // Always: MTU + liveness (apply to every transport on every carrier).
         mtuInput = settingInput(card, "MTU", config.param("mtu", ""));
-        fpsInput = settingInput(card, "FPS / SEI FPS", config.param("fps", config.param("sei-fps", "30")));
-        batchInput = settingInput(card, "Batch / SEI batch", config.param("batch", config.param("sei-batch", "8")));
-        fragInput = settingInput(card, "Fragment bytes", config.param("frag", config.param("sei-frag", "700")));
-        ackInput = settingInput(card, "SEI ACK ms", config.param("sei-ack-ms", config.param("ack-ms", "10000")));
-        lanesInput = settingInput(card, "Multipath lanes", config.param("mc-lanes", config.param("sei-lanes", config.param("lanes", "12"))));
-        controlLanesInput = settingInput(card, "Control lanes", config.param("mc-control-lanes", "1"));
-        connectParallelInput = settingInput(card, "Connect parallelism", config.param("mc-connect-parallel", config.param("mc-connect-parallelism", "2")));
-        minReadyInput = settingInput(card, "Minimum ready lanes", config.param("mc-min-ready", "4"));
-        maxStreamsInput = settingInput(card, "Max streams per lane", config.param("mc-max-streams-per-lane", "3"));
-        trafficPayloadInput = settingInput(card, "Traffic max payload", config.param("traffic-max-payload", config.param("traffic-max-payload-size", "5600")));
-        trafficMinDelayInput = settingInput(card, "Traffic min delay", config.param("traffic-min-delay", "4ms"));
-        trafficMaxDelayInput = settingInput(card, "Traffic max delay", config.param("traffic-max-delay", "18ms"));
-        liveIntervalInput = settingInput(card, "Liveness interval", config.param("liveness-interval", "20s"));
-        liveTimeoutInput = settingInput(card, "Liveness timeout", config.param("liveness-timeout", "60s"));
-        liveFailuresInput = settingInput(card, "Liveness failures", config.param("liveness-failures", "3"));
+
+        if (isSei || isVp8) {
+            // FPS / batch labels make sense only for SEI and legacy VP8.
+            fpsInput = settingInput(card, isSei ? "SEI FPS" : "VP8 FPS",
+                    config.param("fps", config.param(isSei ? "sei-fps" : "vp8-fps", isSei ? "30" : "25")));
+            batchInput = settingInput(card, isSei ? "SEI batch" : "VP8 batch",
+                    config.param("batch", config.param(isSei ? "sei-batch" : "vp8-batch", isSei ? "8" : "1")));
+        }
+
+        if (isSei) {
+            fragInput = settingInput(card, "Fragment bytes", config.param("frag", config.param("sei-frag", "700")));
+            ackInput = settingInput(card, "SEI ACK ms", config.param("sei-ack-ms", config.param("ack-ms", "10000")));
+            if (isMtsLink) {
+                // Multipath lanes are mtslink+SEI specific.
+                lanesInput = settingInput(card, "Multipath lanes", config.param("mc-lanes", config.param("sei-lanes", config.param("lanes", "12"))));
+                controlLanesInput = settingInput(card, "Control lanes", config.param("mc-control-lanes", "1"));
+                connectParallelInput = settingInput(card, "Connect parallelism", config.param("mc-connect-parallel", config.param("mc-connect-parallelism", "2")));
+                minReadyInput = settingInput(card, "Minimum ready lanes", config.param("mc-min-ready", "4"));
+                maxStreamsInput = settingInput(card, "Max streams per lane", config.param("mc-max-streams-per-lane", "3"));
+                trafficPayloadInput = settingInput(card, "Traffic max payload", config.param("traffic-max-payload", config.param("traffic-max-payload-size", "5600")));
+                trafficMinDelayInput = settingInput(card, "Traffic min delay", config.param("traffic-min-delay", "4ms"));
+                trafficMaxDelayInput = settingInput(card, "Traffic max delay", config.param("traffic-max-delay", "18ms"));
+            }
+        }
+
+        if (isMtsLink) {
+            // Liveness applies to every mtslink transport (control channel).
+            liveIntervalInput = settingInput(card, "Liveness interval", config.param("liveness-interval", "20s"));
+            liveTimeoutInput = settingInput(card, "Liveness timeout", config.param("liveness-timeout", "60s"));
+            liveFailuresInput = settingInput(card, "Liveness failures", config.param("liveness-failures", "3"));
+        }
 
         TextView save = primarySmallButton("Сохранить параметры");
         save.setOnClickListener(v -> saveSettings(selected));
@@ -615,14 +665,14 @@ public final class MainActivity extends Activity {
 
     private EditText settingInput(LinearLayout parent, String label, String value) {
         TextView l = smallMono(label);
-        l.setTextColor(Color.parseColor("#66667A"));
+        l.setTextColor(COLOR_TEXT_DIM);
         parent.addView(l, lpMatchWrapNoMargin());
         EditText input = new EditText(this);
         input.setSingleLine(true);
         input.setText(value == null ? "" : value);
         input.setInputType(InputType.TYPE_CLASS_TEXT | InputType.TYPE_TEXT_FLAG_NO_SUGGESTIONS);
-        input.setTextColor(Color.parseColor("#F0F0F8"));
-        input.setHintTextColor(Color.parseColor("#55556A"));
+        input.setTextColor(COLOR_TEXT);
+        input.setHintTextColor(COLOR_TEXT_MUTED);
         input.setTextSize(TypedValue.COMPLEX_UNIT_SP, 14);
         input.setPadding(dp(12), dp(10), dp(12), dp(10));
         input.setBackground(roundedDrawable("#101018", 12, "#2A2A38", 1));
@@ -636,12 +686,12 @@ public final class MainActivity extends Activity {
         box.setPadding(0, dp(8), 0, dp(12));
         TextView t = new TextView(this);
         t.setText(title);
-        t.setTextColor(Color.parseColor("#F0F0F8"));
+        t.setTextColor(COLOR_TEXT);
         t.setTextSize(TypedValue.COMPLEX_UNIT_SP, 24);
         t.setTypeface(Typeface.DEFAULT_BOLD);
         box.addView(t, lpMatchWrapNoMargin());
         TextView s = bodyText(subtitle);
-        s.setTextColor(Color.parseColor("#66667A"));
+        s.setTextColor(COLOR_TEXT_DIM);
         box.addView(s, lpMatchWrapNoMargin());
         return box;
     }
@@ -665,7 +715,7 @@ public final class MainActivity extends Activity {
         nav.setGravity(Gravity.CENTER);
         nav.setTextSize(TypedValue.COMPLEX_UNIT_SP, 9);
         nav.setTypeface(Typeface.DEFAULT_BOLD);
-        nav.setTextColor(tab == activeTab ? Color.parseColor("#6C5CE7") : Color.parseColor("#444456"));
+        nav.setTextColor(tab == activeTab ? COLOR_PRIMARY : COLOR_BORDER);
         nav.setLineSpacing(0f, 0.95f);
         nav.setPadding(dp(4), dp(8), dp(4), dp(8));
         nav.setOnClickListener(v -> {
@@ -720,7 +770,7 @@ public final class MainActivity extends Activity {
                     if ("dot".equals(tag)) {
                         inner.setBackground(roundedDrawable(on ? colorHex(transportAccent(transport)) : "#444452", 6, null, 0));
                     } else if ("label".equals(tag) && inner instanceof TextView) {
-                        ((TextView) inner).setTextColor(on ? Color.parseColor("#D7D2FF") : Color.parseColor("#66667A"));
+                        ((TextView) inner).setTextColor(on ? COLOR_PRIMARY_PALE : COLOR_TEXT_DIM);
                     }
                 }
             }
@@ -759,7 +809,7 @@ public final class MainActivity extends Activity {
         TextView icon = new TextView(this);
         icon.setGravity(Gravity.CENTER);
         icon.setText(profileIcon(profile));
-        icon.setTextColor(Color.parseColor("#A89FF5"));
+        icon.setTextColor(COLOR_PRIMARY_LIGHT);
         icon.setTextSize(TypedValue.COMPLEX_UNIT_SP, 16);
         icon.setIncludeFontPadding(false);
         icon.setBackground(roundedDrawable("#1C1C26", 10, null, 0));
@@ -770,7 +820,7 @@ public final class MainActivity extends Activity {
         LinearLayout text = new LinearLayout(this);
         text.setOrientation(LinearLayout.VERTICAL);
         TextView name = bodyText(profileTitle(profile));
-        name.setTextColor(Color.parseColor("#CCCCD8"));
+        name.setTextColor(COLOR_TEXT_SECONDARY);
         name.setTypeface(Typeface.DEFAULT_BOLD);
         text.addView(name, lpMatchWrapNoMargin());
         TextView meta = smallText(profileMeta(profile));
@@ -815,7 +865,7 @@ public final class MainActivity extends Activity {
         row.setPadding(0, dp(5), 0, dp(5));
 
         TextView time = smallMono(currentShortTime());
-        time.setTextColor(Color.parseColor("#3E3E50"));
+        time.setTextColor(COLOR_BORDER_DIM);
         row.addView(time, fixedWidth(dp(42)));
 
         TextView tagView = smallMono(tag);
@@ -867,8 +917,8 @@ public final class MainActivity extends Activity {
     private EditText editText(String hint, boolean multiline) {
         EditText edit = new EditText(this);
         edit.setHint(hint);
-        edit.setTextColor(Color.parseColor("#F0F0F8"));
-        edit.setHintTextColor(Color.parseColor("#55556A"));
+        edit.setTextColor(COLOR_TEXT);
+        edit.setHintTextColor(COLOR_TEXT_MUTED);
         edit.setTextSize(TypedValue.COMPLEX_UNIT_SP, 14);
         edit.setPadding(dp(12), dp(12), dp(12), dp(12));
         edit.setBackground(roundedDrawable("#101018", 12, "#2A2A38", 1));
@@ -1260,7 +1310,7 @@ public final class MainActivity extends Activity {
                 toggleButton.setBackground(gradientButton());
             } else if (state == STATE_CONNECTING) {
                 toggleButton.setText("Остановить");
-                toggleButton.setTextColor(Color.parseColor("#E7E7F0"));
+                toggleButton.setTextColor(COLOR_TEXT_BRIGHT);
                 toggleButton.setBackground(roundedDrawable("#16161F", 16, "#2A2A38", 1));
             } else {
                 toggleButton.setText("Подключить");
@@ -1361,11 +1411,11 @@ public final class MainActivity extends Activity {
     }
 
     private int transportAccent(String transport) {
-        if (OlcUriParser.TRANSPORT_SEI.equals(transport)) return Color.parseColor("#00D2FF");
-        if (OlcUriParser.TRANSPORT_VP8.equals(transport)) return Color.parseColor("#E17055");
-        if (OlcUriParser.TRANSPORT_VIDEO.equals(transport)) return Color.parseColor("#5B8CFF");
-        if (OlcUriParser.TRANSPORT_DATA.equals(transport)) return Color.parseColor("#6C5CE7");
-        return Color.parseColor("#66667A");
+        if (OlcUriParser.TRANSPORT_SEI.equals(transport)) return COLOR_SEI;
+        if (OlcUriParser.TRANSPORT_VP8.equals(transport)) return COLOR_VP8;
+        if (OlcUriParser.TRANSPORT_VIDEO.equals(transport)) return COLOR_VIDEO;
+        if (OlcUriParser.TRANSPORT_DATA.equals(transport)) return COLOR_PRIMARY;
+        return COLOR_TEXT_DIM;
     }
 
     private String colorHex(int color) {
@@ -1421,10 +1471,10 @@ public final class MainActivity extends Activity {
     }
 
     private int tagColor(String tag) {
-        if ("OK".equals(tag)) return Color.parseColor("#00D2FF");
-        if ("WARN".equals(tag)) return Color.parseColor("#E17055");
-        if ("DNS".equals(tag)) return Color.parseColor("#6C5CE7");
-        return Color.parseColor("#66667A");
+        if ("OK".equals(tag)) return COLOR_SEI;
+        if ("WARN".equals(tag)) return COLOR_VP8;
+        if ("DNS".equals(tag)) return COLOR_PRIMARY;
+        return COLOR_TEXT_DIM;
     }
 
     private String compactEvent(String event) {
@@ -1511,7 +1561,7 @@ public final class MainActivity extends Activity {
 
     private TextView sectionTitle(String text) {
         TextView view = smallMono(text);
-        view.setTextColor(Color.parseColor("#55556A"));
+        view.setTextColor(COLOR_TEXT_MUTED);
         view.setTypeface(Typeface.DEFAULT_BOLD);
         return view;
     }
@@ -1527,7 +1577,7 @@ public final class MainActivity extends Activity {
     private TextView bodyText(String text) {
         TextView view = new TextView(this);
         view.setText(text);
-        view.setTextColor(Color.parseColor("#CFCFDB"));
+        view.setTextColor(COLOR_TEXT_TERTIARY);
         view.setTextSize(TypedValue.COMPLEX_UNIT_SP, 13);
         view.setLineSpacing(0f, 1.15f);
         return view;
@@ -1536,7 +1586,7 @@ public final class MainActivity extends Activity {
     private TextView smallText(String text) {
         TextView view = new TextView(this);
         view.setText(text);
-        view.setTextColor(Color.parseColor("#66667A"));
+        view.setTextColor(COLOR_TEXT_DIM);
         view.setTextSize(TypedValue.COMPLEX_UNIT_SP, 11);
         view.setLineSpacing(0f, 1.15f);
         return view;
@@ -1544,7 +1594,7 @@ public final class MainActivity extends Activity {
 
     private TextView smallAction(String text) {
         TextView view = smallMono(text);
-        view.setTextColor(Color.parseColor("#6C5CE7"));
+        view.setTextColor(COLOR_PRIMARY);
         view.setPadding(dp(8), dp(5), dp(8), dp(5));
         view.setClickable(true);
         return view;
@@ -1565,7 +1615,7 @@ public final class MainActivity extends Activity {
 
     private TextView secondarySmallButton(String text) {
         TextView b = primarySmallButton(text);
-        b.setTextColor(Color.parseColor("#D7D2FF"));
+        b.setTextColor(COLOR_PRIMARY_PALE);
         b.setBackground(roundedDrawable("#16161F", 14, "#2A2A38", 1));
         return b;
     }
@@ -1595,8 +1645,8 @@ public final class MainActivity extends Activity {
 
     private GradientDrawable gradientButton() {
         GradientDrawable drawable = new GradientDrawable(GradientDrawable.Orientation.LEFT_RIGHT, new int[]{
-                Color.parseColor("#6C5CE7"),
-                Color.parseColor("#00D2FF")
+                COLOR_PRIMARY,
+                COLOR_SEI
         });
         drawable.setCornerRadius(dp(16));
         return drawable;
@@ -1713,7 +1763,7 @@ public final class MainActivity extends Activity {
             float bottom = getHeight() - 2f * density;
             for (int i = 0; i < 4; i++) {
                 float height = Math.max(4f * density, maxHeight * (0.3f + i * 0.23f));
-                paint.setColor(i < level ? Color.parseColor(active ? "#6C5CE7" : "#5B4FD6") : Color.parseColor("#2A2A38"));
+                paint.setColor(i < level ? (active ? COLOR_PRIMARY : COLOR_PRIMARY_DEEP) : COLOR_SURFACE_LINE);
                 float x = left + i * (barWidth + gap);
                 canvas.drawRoundRect(x, bottom - height, x + barWidth, bottom, radius, radius, paint);
             }

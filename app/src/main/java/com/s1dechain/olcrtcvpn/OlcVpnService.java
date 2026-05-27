@@ -329,7 +329,14 @@ public final class OlcVpnService extends VpnService {
         }
         reconnectAttempt++;
         int delayMs = Math.min(30000, 5000 + reconnectAttempt * 3000);
-        final int scheduledGeneration = workerGeneration;
+        final int scheduledGeneration;
+        // Capture the generation under the same monitor that mutates it. Without
+        // this lock another thread (scheduleControlledReconnect) could bump the
+        // generation between the read and the post-sleep check, opening a race
+        // where two workers start back-to-back.
+        synchronized (lock) {
+            scheduledGeneration = workerGeneration;
+        }
         sendStatus("Автопереподключение через " + (delayMs / 1000) + " сек. Попытка #" + reconnectAttempt);
         new Thread(() -> {
             try { Thread.sleep(delayMs); } catch (InterruptedException ignored) {}
@@ -590,18 +597,20 @@ public final class OlcVpnService extends VpnService {
     }
 
     private int seiBatch(OlcConfig config) {
-        boolean isMtsLink = config != null && "mtslink".equalsIgnoreCase(config.carrier);
-        return config == null ? 64 : config.intParam("batch", config.intParam("sei-batch", isMtsLink ? 8 : 64));
+        // Aligned with mobile.go defaults (seiBatchSize=8): both mtslink and other
+        // carriers must agree on batch size, otherwise Go and Java drift apart
+        // (Android could send 64 frames per tick while Go expects 8).
+        return config == null ? 8 : config.intParam("batch", config.intParam("sei-batch", 8));
     }
 
     private int seiFrag(OlcConfig config) {
-        boolean isMtsLink = config != null && "mtslink".equalsIgnoreCase(config.carrier);
-        return config == null ? 900 : config.intParam("frag", config.intParam("sei-frag", isMtsLink ? 700 : 900));
+        // Aligned with mobile.go default seiFragmentSize=700.
+        return config == null ? 700 : config.intParam("frag", config.intParam("sei-frag", 700));
     }
 
     private int seiAckMs(OlcConfig config) {
-        boolean isMtsLink = config != null && "mtslink".equalsIgnoreCase(config.carrier);
-        return config == null ? 2000 : config.intParam("ack-ms", config.intParam("sei-ack-ms", isMtsLink ? 10000 : 2000));
+        // Aligned with mobile.go default seiAckTimeoutMS=10000.
+        return config == null ? 10000 : config.intParam("ack-ms", config.intParam("sei-ack-ms", 10000));
     }
 
     private int clampInt(int value, int min, int max) {

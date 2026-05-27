@@ -2,14 +2,47 @@
 
 ## Unreleased
 
-- Android dashboard polish: transport chips are read-only profile indicators,
-  selected server rows now show active dots, compact icons, and dynamic signal
-  bars instead of silently rewriting the saved URI.
-- Android profile settings now expose the full MTS Link multipath/traffic set:
-  control lanes, connect parallelism, min-ready lanes, max streams per lane,
-  traffic payload cap, traffic pacing, and liveness interval.
-- MTS Link `script/srv.sh` now asks for server-side multipath/liveness/traffic
-  settings and emits matching YAML plus URI parameters for the client profile.
+- **VPN bootstrap restored.** `OlcVpnService.runVpnOnce` calls
+  `olc.setAutoDNS(...)` to pick a pre-tunnel DNS upstream; the matching
+  `SetAutoDNS` / `GetAutoDNSUpstream` symbols now exist in the bundled `mtsRTC`
+  mobile API, so the service no longer crashes with `NoSuchMethodException` on
+  every connect attempt.
+- **Transport chips are interactive.** Tapping `SEI / VP8 / Data / Video`
+  rewrites the active profile's URI via `switchSelectedTransport` and restarts
+  the VPN if it was running. Chips were previously decorative.
+- **`videochannel` recognised end-to-end.** `mtsRTC`'s `normalizeTransport`
+  no longer collapses `videochannel` to `vp8channel`. The Android
+  `OlcMobileBridge` also stops applying the SEI-calibrated `traffic-max-payload`
+  floor to `videochannel`/`vp8channel`, which would have truncated H.264
+  access units at the crypto layer.
+- **SEI defaults aligned with the Go runtime.** Java `seiBatch / seiFrag /
+  seiAckMs` defaults are now `8 / 700 / 10000` for every carrier (mtslink and
+  others) so Android and Go agree on batch sizes and ACK timeouts. Non-mtslink
+  carriers previously sent `batch=64, ack-ms=2000` against Go's `8 / 10000`.
+- **Per-transport probe options.** `mtsRTC` `Check()` and `Ping()` build
+  `TransportOptions` via `buildCheckOptions`, so SEI probes get
+  `seichannel.Options`, video probes pass `nil`, and VP8/data still get
+  `vp8channel.Options`. The hard-coded `vp8channel.Options` against SEI used
+  to fail with `ErrOptionsTypeMismatch`.
+- **Settings tab is transport-aware.** `buildSettingsForm` only renders SEI
+  fields when the active transport is SEI, and only renders multipath fields
+  when the carrier is mtslink. Opening a VP8 profile no longer stamps
+  `mc-lanes=12` into the URI on save.
+- **Palette extracted.** Dashboard hex literals moved into `COLOR_*` static
+  finals in `MainActivity` so retheming is a single-file edit.
+- **Traffic tab labelled as approximate.** The metrics are sourced from
+  `TrafficStats.getUidRxBytes/TxBytes`, which include the app's own
+  background traffic; the tab header now warns the user.
+- **Tighter reconnect locking.** `OlcVpnService.scheduleReconnectIfNeeded`
+  captures the `workerGeneration` under the same monitor that mutates it,
+  closing a TOCTOU window where a controlled reconnect could race the delayed
+  reconnect thread.
+- **mtsRTC transport hardening.** The `seichannel` remote-track goroutine
+  now checks the closed flag and `closeCh` at the top of every read loop and
+  reads with a 250 ms deadline, bounding goroutine lifetime under reconnect
+  storms. The MTS Link engine threads a cancellable context through the silent
+  audio pump and the pin loop, and bounds `Pin()` calls with a 5 s deadline so
+  `Close()` cannot strand a 25 s in-flight HTTP request.
 
 ## 1.9.5-universal-carrier
 

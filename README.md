@@ -69,9 +69,39 @@ streams across several independent MTS Link guest bots. `videochannel` is kept
 for diagnostics and legacy visible-video tests.
 
 Android `1.9.5` adds the dark live dashboard from the redesign: status badge,
-session traffic counter, read-only transport indicators, metrics cards, profile
-cards with signal bars, event log, and bottom navigation. The profile storage
-format is unchanged.
+session traffic counter, transport chips, metrics cards, profile cards with
+signal bars, event log, and bottom navigation. The profile storage format is
+unchanged.
+
+### What changed in this drop
+
+- **Transport chips are interactive.** Tapping `SEI / VP8 / Data / Video` now
+  rewrites the active profile's URI through `rewriteTransport`, persists it,
+  and restarts the VPN if it was running. The chips used to be decorative
+  (`setClickable(false)`).
+- **Pre-tunnel DNS works again.** `OlcVpnService.runVpnOnce` calls
+  `olc.setAutoDNS(...)` without try-catch; the matching `SetAutoDNS` /
+  `GetAutoDNSUpstream` symbols now exist on the Go side (mtsRTC). Without
+  them the VPN crashed on every start with `NoSuchMethodException`.
+- **`videochannel` no longer collapses to VP8.** `normalizeTransport` accepts
+  `videochannel` and its aliases. `OlcMobileBridge.applyCarrierRuntimeOptions`
+  no longer applies the SEI-calibrated `traffic-max-payload` floor to
+  videochannel/vp8channel paths (it would have truncated H.264 access units
+  in the crypto layer).
+- **SEI defaults aligned with the Go runtime.** `OlcVpnService.seiBatch /
+  seiFrag / seiAckMs` now default to `8 / 700 / 10000` for every carrier,
+  matching `mobile.go`. Previously non-mtslink carriers sent `batch=64,
+  ack-ms=2000`, while Go expected `batch=8, ack-ms=10000`.
+- **Settings tab is transport-aware.** Fragment/ack/multipath fields are only
+  rendered for `seichannel` (and multipath fields only when the carrier is
+  `mtslink`), so opening a VP8 profile no longer stamps `mc-lanes=12` into
+  the URI on save.
+- **Palette extracted into one place.** The dashboard's hex literals now live
+  as `COLOR_*` constants in `MainActivity` so retheming is a single-file edit.
+- **Traffic tab labelled as approximate.** The metrics come from
+  `TrafficStats.getUidRxBytes/TxBytes`, which include the app's own
+  background traffic (probes, DNS, HTTP pings), so the panel header now warns
+  the user.
 
 See [MTSLINK.md](MTSLINK.md) for the server YAML, URI examples, and diagnostics.
 
