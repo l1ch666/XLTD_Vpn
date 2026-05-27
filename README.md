@@ -69,8 +69,9 @@ streams across several independent MTS Link guest bots. `videochannel` is kept
 for diagnostics and legacy visible-video tests.
 
 Android `1.9.5` adds the dark live dashboard from the redesign: status badge,
-session traffic counter, transport chips, metrics cards, profile cards, event
-log, and bottom navigation. The profile storage format is unchanged.
+session traffic counter, read-only transport indicators, metrics cards, profile
+cards with signal bars, event log, and bottom navigation. The profile storage
+format is unchanged.
 
 See [MTSLINK.md](MTSLINK.md) for the server YAML, URI examples, and diagnostics.
 

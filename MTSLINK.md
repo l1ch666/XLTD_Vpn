@@ -79,6 +79,9 @@ Run:
 ./olcrtc server-mtslink.yaml
 ```
 
+The helper `script/srv.sh` in the `mtsRTC` checkout asks for these MTS Link
+multipath, traffic, and liveness values now and prints a matching client URI.
+
 ## Client URI
 
 The matching client profile URI is:

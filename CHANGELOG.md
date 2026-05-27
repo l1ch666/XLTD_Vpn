@@ -2,7 +2,14 @@
 
 ## Unreleased
 
-- No pending user-visible changes.
+- Android dashboard polish: transport chips are read-only profile indicators,
+  selected server rows now show active dots, compact icons, and dynamic signal
+  bars instead of silently rewriting the saved URI.
+- Android profile settings now expose the full MTS Link multipath/traffic set:
+  control lanes, connect parallelism, min-ready lanes, max streams per lane,
+  traffic payload cap, traffic pacing, and liveness interval.
+- MTS Link `script/srv.sh` now asks for server-side multipath/liveness/traffic
+  settings and emits matching YAML plus URI parameters for the client profile.
 
 ## 1.9.5-universal-carrier
 
@@ -15,8 +22,8 @@
 - Updated MTS Link docs and examples to recommend 12 lanes, one reserved
   control lane, and matching traffic/liveness defaults.
 - Replaced the Android main screen with the dark live runtime UI: status badge,
-  session traffic counter, transport chips, metrics grid, profile cards, event
-  log, and bottom navigation for home/profiles/traffic/settings.
+  session traffic counter, transport indicators, metrics grid, profile cards,
+  event log, and bottom navigation for home/profiles/traffic/settings.
 - Added Android service telemetry broadcasts for carrier, transport, lanes,
   uptime, SOCKS probe latency, session bytes, current speed, and recent status
   events.

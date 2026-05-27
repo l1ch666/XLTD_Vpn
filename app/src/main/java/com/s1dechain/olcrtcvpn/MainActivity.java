@@ -6,7 +6,9 @@ import android.content.Context;
 import android.content.Intent;
 import android.content.IntentFilter;
 import android.content.SharedPreferences;
+import android.graphics.Canvas;
 import android.graphics.Color;
+import android.graphics.Paint;
 import android.graphics.Typeface;
 import android.graphics.drawable.GradientDrawable;
 import android.net.Uri;
@@ -73,6 +75,7 @@ public final class MainActivity extends Activity {
     private LinearLayout eventLog;
     private TextView statusView;
     private TextView detailsView;
+    private boolean profileCardsFull = false;
 
     private EditText profileNameInput;
     private EditText linkInput;
@@ -86,6 +89,14 @@ public final class MainActivity extends Activity {
     private EditText fragInput;
     private EditText ackInput;
     private EditText lanesInput;
+    private EditText controlLanesInput;
+    private EditText connectParallelInput;
+    private EditText minReadyInput;
+    private EditText maxStreamsInput;
+    private EditText trafficPayloadInput;
+    private EditText trafficMinDelayInput;
+    private EditText trafficMaxDelayInput;
+    private EditText liveIntervalInput;
     private EditText liveTimeoutInput;
     private EditText liveFailuresInput;
 
@@ -249,6 +260,14 @@ public final class MainActivity extends Activity {
         fragInput = null;
         ackInput = null;
         lanesInput = null;
+        controlLanesInput = null;
+        connectParallelInput = null;
+        minReadyInput = null;
+        maxStreamsInput = null;
+        trafficPayloadInput = null;
+        trafficMinDelayInput = null;
+        trafficMaxDelayInput = null;
+        liveIntervalInput = null;
         liveTimeoutInput = null;
         liveFailuresInput = null;
 
@@ -385,7 +404,7 @@ public final class MainActivity extends Activity {
     private LinearLayout buildTransportChips() {
         chipBar = new LinearLayout(this);
         chipBar.setOrientation(LinearLayout.HORIZONTAL);
-        chipBar.setGravity(Gravity.CENTER_VERTICAL);
+        chipBar.setGravity(Gravity.CENTER);
         chipBar.setPadding(0, 0, 0, dp(12));
         addTransportChip("SEI", OlcUriParser.TRANSPORT_SEI);
         addTransportChip("VP8", OlcUriParser.TRANSPORT_VP8);
@@ -395,19 +414,32 @@ public final class MainActivity extends Activity {
     }
 
     private void addTransportChip(String label, String transport) {
-        TextView chip = new TextView(this);
-        chip.setText(label);
+        LinearLayout chip = new LinearLayout(this);
+        chip.setOrientation(LinearLayout.HORIZONTAL);
         chip.setGravity(Gravity.CENTER);
-        chip.setTextSize(TypedValue.COMPLEX_UNIT_SP, 11);
-        chip.setPadding(dp(12), dp(7), dp(12), dp(7));
-        chip.setClickable(true);
-        chip.setOnClickListener(v -> switchSelectedTransport(transport));
+        chip.setPadding(dp(10), dp(6), dp(10), dp(6));
+        chip.setClickable(false);
         chip.setTag(transport);
+
+        View dot = new View(this);
+        dot.setTag("dot");
+        LinearLayout.LayoutParams dotLp = new LinearLayout.LayoutParams(dp(6), dp(6));
+        dotLp.setMargins(0, 0, dp(5), 0);
+        chip.addView(dot, dotLp);
+
+        TextView text = new TextView(this);
+        text.setTag("label");
+        text.setText(label);
+        text.setGravity(Gravity.CENTER);
+        text.setIncludeFontPadding(false);
+        text.setTextSize(TypedValue.COMPLEX_UNIT_SP, 11);
+        chip.addView(text, lpWrapWrapNoMargin());
+
         LinearLayout.LayoutParams lp = new LinearLayout.LayoutParams(
                 ViewGroup.LayoutParams.WRAP_CONTENT,
                 ViewGroup.LayoutParams.WRAP_CONTENT
         );
-        lp.setMargins(0, 0, dp(7), 0);
+        lp.setMargins(dp(3), 0, dp(3), 0);
         chipBar.addView(chip, lp);
     }
 
@@ -463,6 +495,7 @@ public final class MainActivity extends Activity {
 
     private LinearLayout buildProfilesPanel(boolean full) {
         LinearLayout card = card();
+        profileCardsFull = full;
         LinearLayout header = row();
         TextView title = sectionTitle(full ? "ПРОФИЛИ" : "СЕРВЕРЫ");
         header.addView(title, new LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f));
@@ -555,6 +588,14 @@ public final class MainActivity extends Activity {
         fragInput = settingInput(card, "Fragment bytes", config.param("frag", config.param("sei-frag", "700")));
         ackInput = settingInput(card, "SEI ACK ms", config.param("sei-ack-ms", config.param("ack-ms", "10000")));
         lanesInput = settingInput(card, "Multipath lanes", config.param("mc-lanes", config.param("sei-lanes", config.param("lanes", "12"))));
+        controlLanesInput = settingInput(card, "Control lanes", config.param("mc-control-lanes", "1"));
+        connectParallelInput = settingInput(card, "Connect parallelism", config.param("mc-connect-parallel", config.param("mc-connect-parallelism", "2")));
+        minReadyInput = settingInput(card, "Minimum ready lanes", config.param("mc-min-ready", "4"));
+        maxStreamsInput = settingInput(card, "Max streams per lane", config.param("mc-max-streams-per-lane", "3"));
+        trafficPayloadInput = settingInput(card, "Traffic max payload", config.param("traffic-max-payload", config.param("traffic-max-payload-size", "5600")));
+        trafficMinDelayInput = settingInput(card, "Traffic min delay", config.param("traffic-min-delay", "4ms"));
+        trafficMaxDelayInput = settingInput(card, "Traffic max delay", config.param("traffic-max-delay", "18ms"));
+        liveIntervalInput = settingInput(card, "Liveness interval", config.param("liveness-interval", "20s"));
         liveTimeoutInput = settingInput(card, "Liveness timeout", config.param("liveness-timeout", "60s"));
         liveFailuresInput = settingInput(card, "Liveness failures", config.param("liveness-failures", "3"));
 
@@ -620,17 +661,25 @@ public final class MainActivity extends Activity {
 
     private TextView navItem(String label, int tab) {
         TextView nav = new TextView(this);
-        nav.setText(label);
+        nav.setText(navIcon(tab) + "\n" + label.toUpperCase(Locale.ROOT));
         nav.setGravity(Gravity.CENTER);
-        nav.setTextSize(TypedValue.COMPLEX_UNIT_SP, 10);
+        nav.setTextSize(TypedValue.COMPLEX_UNIT_SP, 9);
         nav.setTypeface(Typeface.DEFAULT_BOLD);
         nav.setTextColor(tab == activeTab ? Color.parseColor("#6C5CE7") : Color.parseColor("#444456"));
+        nav.setLineSpacing(0f, 0.95f);
         nav.setPadding(dp(4), dp(8), dp(4), dp(8));
         nav.setOnClickListener(v -> {
             activeTab = tab;
             renderActiveTab();
         });
         return nav;
+    }
+
+    private String navIcon(int tab) {
+        if (tab == TAB_HOME) return "◇";
+        if (tab == TAB_PROFILES) return "≡";
+        if (tab == TAB_TRAFFIC) return "↕";
+        return "⚙";
     }
 
     private void refreshDynamicUi() {
@@ -660,12 +709,21 @@ public final class MainActivity extends Activity {
         String active = selected == null ? telemetryTransport : selected.transport;
         for (int i = 0; i < chipBar.getChildCount(); i++) {
             View child = chipBar.getChildAt(i);
-            if (!(child instanceof TextView)) continue;
             String transport = String.valueOf(child.getTag());
             boolean on = transport.equals(active);
-            TextView chip = (TextView) child;
-            chip.setTextColor(on ? Color.parseColor("#D7D2FF") : Color.parseColor("#66667A"));
-            chip.setBackground(roundedDrawable(on ? "#1E1E2E" : "#16161F", 20, on ? "#6C5CE7" : "#2A2A38", 1));
+            child.setBackground(roundedDrawable(on ? "#1E1E2E" : "#16161F", 20, on ? "#6C5CE7" : "#2A2A38", 1));
+            if (child instanceof ViewGroup) {
+                ViewGroup group = (ViewGroup) child;
+                for (int j = 0; j < group.getChildCount(); j++) {
+                    View inner = group.getChildAt(j);
+                    Object tag = inner.getTag();
+                    if ("dot".equals(tag)) {
+                        inner.setBackground(roundedDrawable(on ? colorHex(transportAccent(transport)) : "#444452", 6, null, 0));
+                    } else if ("label".equals(tag) && inner instanceof TextView) {
+                        ((TextView) inner).setTextColor(on ? Color.parseColor("#D7D2FF") : Color.parseColor("#66667A"));
+                    }
+                }
+            }
         }
     }
 
@@ -687,34 +745,52 @@ public final class MainActivity extends Activity {
         LinearLayout row = new LinearLayout(this);
         row.setOrientation(LinearLayout.HORIZONTAL);
         row.setGravity(Gravity.CENTER_VERTICAL);
-        row.setPadding(dp(12), dp(11), dp(12), dp(11));
-        row.setBackground(roundedDrawable("#16161F", 14, selected ? "#00D2FF" : "#2A2A38", 1));
+        row.setPadding(dp(10), dp(9), dp(10), dp(9));
+        row.setBackground(roundedDrawable("#16161F", 14, selected ? "#383850" : "#2A2A38", 1));
         row.setOnClickListener(v -> selectProfile(profile));
 
         TextView active = new TextView(this);
         active.setText(" ");
         active.setBackground(roundedDrawable(selected ? "#00D2FF" : "#2A2A38", 7, null, 0));
         LinearLayout.LayoutParams dotLp = new LinearLayout.LayoutParams(dp(7), dp(7));
-        dotLp.setMargins(0, 0, dp(11), 0);
+        dotLp.setMargins(0, 0, dp(10), 0);
         row.addView(active, dotLp);
+
+        TextView icon = new TextView(this);
+        icon.setGravity(Gravity.CENTER);
+        icon.setText(profileIcon(profile));
+        icon.setTextColor(Color.parseColor("#A89FF5"));
+        icon.setTextSize(TypedValue.COMPLEX_UNIT_SP, 16);
+        icon.setIncludeFontPadding(false);
+        icon.setBackground(roundedDrawable("#1C1C26", 10, null, 0));
+        LinearLayout.LayoutParams iconLp = new LinearLayout.LayoutParams(dp(32), dp(32));
+        iconLp.setMargins(0, 0, dp(10), 0);
+        row.addView(icon, iconLp);
 
         LinearLayout text = new LinearLayout(this);
         text.setOrientation(LinearLayout.VERTICAL);
-        TextView name = bodyText(profile.name);
+        TextView name = bodyText(profileTitle(profile));
         name.setTextColor(Color.parseColor("#CCCCD8"));
         name.setTypeface(Typeface.DEFAULT_BOLD);
         text.addView(name, lpMatchWrapNoMargin());
-        TextView meta = smallText(profile.carrier + " · " + profile.transport + " · " + lanesLabel(profile.link));
+        TextView meta = smallText(profileMeta(profile));
         text.addView(meta, lpMatchWrapNoMargin());
         row.addView(text, new LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f));
 
-        TextView edit = smallAction("изменить");
-        edit.setOnClickListener(v -> {
-            activeTab = TAB_PROFILES;
-            renderActiveTab();
-            openProfileEditor(profile, true);
-        });
-        row.addView(edit, lpWrapWrapNoMargin());
+        if (profileCardsFull) {
+            TextView edit = smallAction("изменить");
+            edit.setOnClickListener(v -> {
+                activeTab = TAB_PROFILES;
+                renderActiveTab();
+                openProfileEditor(profile, true);
+            });
+            row.addView(edit, lpWrapWrapNoMargin());
+        } else {
+            SignalBarsView signal = new SignalBarsView(this);
+            signal.setLevel(profileQualityLevel(profile));
+            signal.setActive(selected);
+            row.addView(signal, new LinearLayout.LayoutParams(dp(26), dp(24)));
+        }
         return row;
     }
 
@@ -915,6 +991,14 @@ public final class MainActivity extends Activity {
             edits.put("frag", text(fragInput));
             edits.put("sei-ack-ms", text(ackInput));
             edits.put("mc-lanes", text(lanesInput));
+            edits.put("mc-control-lanes", text(controlLanesInput));
+            edits.put("mc-connect-parallel", text(connectParallelInput));
+            edits.put("mc-min-ready", text(minReadyInput));
+            edits.put("mc-max-streams-per-lane", text(maxStreamsInput));
+            edits.put("traffic-max-payload", text(trafficPayloadInput));
+            edits.put("traffic-min-delay", text(trafficMinDelayInput));
+            edits.put("traffic-max-delay", text(trafficMaxDelayInput));
+            edits.put("liveness-interval", text(liveIntervalInput));
             edits.put("liveness-timeout", text(liveTimeoutInput));
             edits.put("liveness-failures", text(liveFailuresInput));
             String rewritten = rewriteParams(selected.link, edits);
@@ -1218,6 +1302,74 @@ public final class MainActivity extends Activity {
     private String selectedProfileTransport() {
         Profile selected = getSelectedProfile();
         return selected == null ? "" : selected.transport;
+    }
+
+    private String profileTitle(Profile profile) {
+        if (profile == null) return "XLTD · —";
+        return displayCarrier(profile.carrier) + " · " + transportShort(profile.transport);
+    }
+
+    private String profileMeta(Profile profile) {
+        if (profile == null) return "";
+        try {
+            OlcConfig config = OlcUriParser.parse(profile.link);
+            if (OlcUriParser.TRANSPORT_SEI.equals(config.transport)) {
+                return "seichannel · lanes=" + lanesFor(config) + " · fps=" + config.param("fps", config.param("sei-fps", "30"));
+            }
+            if (OlcUriParser.TRANSPORT_VP8.equals(config.transport)) {
+                return "vp8channel · batch=" + config.param("vp8-batch", config.param("batch", "4")) + " · fps=" + config.param("vp8-fps", config.param("fps", "25"));
+            }
+            if (OlcUriParser.TRANSPORT_VIDEO.equals(config.transport)) {
+                return "videochannel · fps=" + config.param("video-fps", config.param("fps", "15"));
+            }
+            return config.transport + " · " + displayCarrier(config.carrier);
+        } catch (Exception ignored) {
+            return profile.carrier + " · " + profile.transport + " · " + lanesLabel(profile.link);
+        }
+    }
+
+    private String profileIcon(Profile profile) {
+        String transport = profile == null ? "" : profile.transport;
+        if (OlcUriParser.TRANSPORT_SEI.equals(transport)) return "↯";
+        if (OlcUriParser.TRANSPORT_VP8.equals(transport)) return "♪";
+        if (OlcUriParser.TRANSPORT_VIDEO.equals(transport)) return "▣";
+        return "⌁";
+    }
+
+    private String transportShort(String transport) {
+        if (OlcUriParser.TRANSPORT_SEI.equals(transport)) return "SEI";
+        if (OlcUriParser.TRANSPORT_VP8.equals(transport)) return "VP8";
+        if (OlcUriParser.TRANSPORT_VIDEO.equals(transport)) return "Video";
+        if (OlcUriParser.TRANSPORT_DATA.equals(transport)) return "Data";
+        return transport == null || transport.isEmpty() ? "—" : transport;
+    }
+
+    private int profileQualityLevel(Profile profile) {
+        if (profile != null && profile.id.equals(selectedProfileId)) {
+            if (connectionState == STATE_CONNECTED) {
+                if (probeLatencyMs < 0) return 3;
+                if (probeLatencyMs <= 80) return 4;
+                if (probeLatencyMs <= 180) return 3;
+                if (probeLatencyMs <= 350) return 2;
+                return 1;
+            }
+            if (connectionState == STATE_CONNECTING) return 2;
+            return 1;
+        }
+        if (profile != null && OlcUriParser.TRANSPORT_SEI.equals(profile.transport)) return 3;
+        return 2;
+    }
+
+    private int transportAccent(String transport) {
+        if (OlcUriParser.TRANSPORT_SEI.equals(transport)) return Color.parseColor("#00D2FF");
+        if (OlcUriParser.TRANSPORT_VP8.equals(transport)) return Color.parseColor("#E17055");
+        if (OlcUriParser.TRANSPORT_VIDEO.equals(transport)) return Color.parseColor("#5B8CFF");
+        if (OlcUriParser.TRANSPORT_DATA.equals(transport)) return Color.parseColor("#6C5CE7");
+        return Color.parseColor("#66667A");
+    }
+
+    private String colorHex(int color) {
+        return String.format(Locale.US, "#%06X", 0xFFFFFF & color);
     }
 
     private String compactStatus(String raw) {
@@ -1528,6 +1680,44 @@ public final class MainActivity extends Activity {
         if (value >= 1024d * 1024d) return new ByteLabel(String.format(Locale.US, "%.1f", value / 1024d / 1024d), "MB");
         if (value >= 1024d) return new ByteLabel(String.format(Locale.US, "%.0f", value / 1024d), "KB");
         return new ByteLabel(String.valueOf(Math.round(value)), "B");
+    }
+
+    private static final class SignalBarsView extends View {
+        private final Paint paint = new Paint(Paint.ANTI_ALIAS_FLAG);
+        private int level = 0;
+        private boolean active = false;
+
+        SignalBarsView(Context context) {
+            super(context);
+        }
+
+        void setLevel(int level) {
+            this.level = Math.max(0, Math.min(4, level));
+            invalidate();
+        }
+
+        void setActive(boolean active) {
+            this.active = active;
+            invalidate();
+        }
+
+        @Override
+        protected void onDraw(Canvas canvas) {
+            super.onDraw(canvas);
+            float density = getResources().getDisplayMetrics().density;
+            float gap = 2f * density;
+            float barWidth = 3f * density;
+            float radius = 2f * density;
+            float maxHeight = getHeight() - 4f * density;
+            float left = Math.max(0f, getWidth() - (barWidth * 4f + gap * 3f));
+            float bottom = getHeight() - 2f * density;
+            for (int i = 0; i < 4; i++) {
+                float height = Math.max(4f * density, maxHeight * (0.3f + i * 0.23f));
+                paint.setColor(i < level ? Color.parseColor(active ? "#6C5CE7" : "#5B4FD6") : Color.parseColor("#2A2A38"));
+                float x = left + i * (barWidth + gap);
+                canvas.drawRoundRect(x, bottom - height, x + barWidth, bottom, radius, radius, paint);
+            }
+        }
     }
 
     private static final class ByteLabel {
