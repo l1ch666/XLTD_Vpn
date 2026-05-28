@@ -21,18 +21,23 @@ const state = {
 
 // ── Boot ──────────────────────────────────────────────────────────────────
 async function boot() {
-  state.info     = await api.getInfo();
-  state.profiles = await api.loadProfiles();
-  state.routeMode= await api.getRouteMode();
+  try {
+    state.info     = await api.getInfo();
+    state.profiles = await api.loadProfiles();
+    state.routeMode= await api.getRouteMode();
 
-  document.getElementById('appVer').textContent = 'v' + state.info.version;
-  document.getElementById('railSocks').textContent =
-    state.info.socksHost + ':' + state.info.socksPort;
+    const verEl = document.getElementById('appVer');
+    if (verEl) verEl.textContent = 'v' + state.info.version;
+    const sockEl = document.getElementById('railSocks');
+    if (sockEl) sockEl.textContent = state.info.socksHost + ':' + state.info.socksPort;
 
-  // Core event listeners
-  api.onCoreLog(handleCoreLog);
-  api.onCoreExited(handleCoreExited);
-
+    // Core event listeners
+    api.onCoreLog(handleCoreLog);
+    api.onCoreExited(handleCoreExited);
+  } catch (e) {
+    console.error('Boot init error:', e);
+    // Proceed with defaults — UI still renders
+  }
   renderPage();
 }
 
@@ -43,6 +48,7 @@ function switchTab(tab) {
     el.classList.toggle('active', el.dataset.tab === tab);
   });
   renderPage();
+  updateRailFooter();
 }
 
 function renderPage() {
@@ -61,8 +67,28 @@ function renderPage() {
 //  HOME PAGE
 // ═════════════════════════════════════════════════════════════════════════
 function buildHome(root) {
+  // ── Page head ──
+  const head = el('div', 'page-head');
+  const h2 = el('h2'); h2.textContent = 'Канал жив.'; head.appendChild(h2);
+  const sub = el('span', 'sub');
+  sub.textContent = state.connected ? 'SOCKS ' + state.info.socksHost + ':' + state.info.socksPort : 'XLTD VPN';
+  head.appendChild(sub);
+  root.appendChild(head);
+
   // ── Status hero ──
   root.appendChild(buildStatusRow());
+
+  // ── Transport chips ──
+  root.appendChild(buildTransportChips());
+
+  // ── 4 metric cards ──
+  const grid = el('div', 'metrics-grid');
+  grid.id = 'metricsGrid';
+  grid.appendChild(metricCard('↓ ВХОДЯЩИЙ',  state.connected ? formatSpeed(state.rx) + ' ' + speedUnit(state.rx) : '—', 'seichannel', 'metricRx'));
+  grid.appendChild(metricCard('↑ ИСХОДЯЩИЙ', state.connected ? formatSpeed(state.tx) + ' ' + speedUnit(state.tx) : '—', 'один канал', 'metricTx'));
+  grid.appendChild(metricCard('ЗАДЕРЖКА',    state.lat > 0 ? state.lat + ' ms' : '—', 'SOCKS probe', 'metricLat'));
+  grid.appendChild(metricCard('АПТАЙМ',      state.upSec > 0 ? formatUptime(state.upSec) : '—', 'сессия', 'metricUp'));
+  root.appendChild(grid);
 
   // ── Two columns: profiles + mini log ──
   const two = el('div', 'two-col');
@@ -71,7 +97,7 @@ function buildHome(root) {
   const profCard = card();
   profCard.appendChild(cardHead('ПРОФИЛИ', '+ добавить', () => switchTab('profiles')));
   const listEl = buildProfileList(true);
-  listEl.style.maxHeight = '260px';
+  listEl.style.maxHeight = '240px';
   profCard.appendChild(listEl);
   two.appendChild(profCard);
 
@@ -80,7 +106,7 @@ function buildHome(root) {
   logCard.appendChild(cardHead('СОБЫТИЯ', 'все →', () => switchTab('log')));
   const mlEl = el('div', 'log-box mini-log');
   mlEl.id = 'miniLog';
-  mlEl.style.maxHeight = '260px';
+  mlEl.style.maxHeight = '240px';
   state.miniLogs.slice(-60).forEach(l => mlEl.appendChild(renderLogLine(l)));
   mlEl.scrollTop = 99999;
   logCard.appendChild(mlEl);
@@ -88,8 +114,30 @@ function buildHome(root) {
 
   root.appendChild(two);
 
-  // ── Route + connect bar ──
+  // ── Route mode ──
   root.appendChild(buildRouteRow());
+}
+
+function buildTransportChips() {
+  const transports = [
+    { id: 'seichannel',   label: 'SEI',  cls: 'sei'  },
+    { id: 'vp8channel',   label: 'VP8',  cls: 'vp8'  },
+    { id: 'datachannel',  label: 'Data', cls: 'data' },
+    { id: 'videochannel', label: 'Video',cls: 'vid'  },
+  ];
+  const prof = activeProfile();
+  const activeTransport = prof ? (prof.transport || '') : '';
+
+  const wrap = el('div', 'chips');
+  wrap.style.marginBottom = '4px';
+  transports.forEach(t => {
+    const isOn = activeTransport === t.id;
+    const chip = el('div', 'chip' + (isOn ? ' on ' + t.cls : ''));
+    chip.innerHTML = `<span class="dot"></span>${t.label}`;
+    chip.title = t.id;
+    wrap.appendChild(chip);
+  });
+  return wrap;
 }
 
 function buildStatusRow() {
@@ -108,9 +156,9 @@ function buildStatusRow() {
   badge.appendChild(txt);
   left.appendChild(badge);
 
-  // Speed
+  // Speed (lime arrow = seichannel alive)
   const speed = el('div', 'status-speed');
-  speed.innerHTML = `<span class="arrow">↓</span>
+  speed.innerHTML = `<span class="arrow" style="color:var(--ok)">↓</span>
     <span class="val" id="speedVal">${state.connected ? formatSpeed(state.rx) : '—'}</span>
     <span class="unit">${state.connected ? speedUnit(state.rx) : ''}</span>`;
   left.appendChild(speed);
@@ -299,9 +347,15 @@ function metricCard(label, val, sub, id) {
   const c = el('div', 'metric-card');
   const l = el('div', 'metric-label'); l.textContent = label; c.appendChild(l);
   const v = el('div', 'metric-val');   v.id = id; v.textContent = val; c.appendChild(v);
-  if (sub) { const s = el('div', 'metric-sub'); s.textContent = sub; c.appendChild(s); }
+  const s = el('div', 'metric-sub'); s.id = id + 'Sub'; s.textContent = sub || ''; c.appendChild(s);
   const sp = el('div', 'spark');
-  for (let i = 0; i < 8; i++) sp.appendChild(el('span'));
+  sp.id = id + 'Spark';
+  for (let i = 0; i < 8; i++) {
+    const bar = el('span');
+    // Last two bars "hi" to show activity
+    if (i >= 6 && val !== '—') bar.className = 'hi';
+    sp.appendChild(bar);
+  }
   c.appendChild(sp);
   return c;
 }
@@ -426,6 +480,31 @@ async function toggleConnect() {
   updateHeroUI();
 }
 
+function updateRailFooter() {
+  const modes = ['SOCKS Only', 'User Proxy (β)', 'Full Tunnel (β)'];
+  const modeEl = document.getElementById('railMode');
+  if (modeEl) modeEl.textContent = modes[state.routeMode] || 'SOCKS Only';
+  const coreEl = document.getElementById('railCore');
+  if (coreEl) {
+    if (state.connected) {
+      coreEl.textContent = 'подключён';
+      coreEl.style.color = 'var(--ok)';
+    } else if (state.connecting) {
+      coreEl.textContent = 'подключение...';
+      coreEl.style.color = 'var(--primary-lt)';
+    } else {
+      coreEl.textContent = 'остановлен';
+      coreEl.style.color = 'var(--dim)';
+    }
+  }
+  const centerEl = document.getElementById('titleCenter');
+  if (centerEl) {
+    centerEl.textContent = state.connected
+      ? (activeProfile()?.carrier?.toUpperCase() || 'CONNECTED')
+      : 'WIN-X64';
+  }
+}
+
 function handleCoreLog(line) {
   if (!line || /^\s*$/.test(line)) return;
   // Filter noise
@@ -536,6 +615,7 @@ function renderLogLine(entry) {
 //  HERO UI UPDATE (after connect/disconnect)
 // ═════════════════════════════════════════════════════════════════════════
 function updateHeroUI() {
+  updateRailFooter();
   if (state.tab !== 'home') return;
   // Re-render home to reflect connection state
   renderPage();

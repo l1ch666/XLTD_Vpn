@@ -21,7 +21,7 @@ function createWindow() {
     minHeight: 620,
     frame: false,              // custom title bar
     transparent: false,
-    backgroundColor: '#0D0D14',
+    backgroundColor: '#0E1014',
     show: false,
     icon: path.join(__dirname, 'assets', 'icon.png'),
     webPreferences: {

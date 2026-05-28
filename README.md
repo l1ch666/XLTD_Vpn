@@ -7,8 +7,8 @@ Current stable line:
 
 | Platform | Version | Notes |
 | --- | --- | --- |
-| Android | `1.9.5-universal-carrier` | Dark runtime UI, live telemetry, MTS Link multipath profiles, and rebuilt combo core. |
-| Windows | `0.5.5-beta` | Native Windows GUI with local SOCKS, user proxy, experimental full tunnel, and refreshed bundled core. |
+| Android | `1.10.0-universal-carrier` | v3 graphite+blue+lime design, live download speed hero, single seichannel (multipath removed). |
+| Windows | `0.6.0-beta` | v3 palette, 4-metric home grid, transport chips, rail footer, boot crash fix, multipath removed from YAML. |
 
 The isolated Xray work lives on branch `alpha/xray-0.0.1` and is versioned as
 `0.0.x-alpha`. The stable `main` branch stays focused on olcRTC and MTS Link.
@@ -45,7 +45,7 @@ Practical defaults:
 
 - `jitsi + datachannel` is the fastest ordinary olcRTC path.
 - `telemost + vp8channel` is the main stable Telemost path.
-- `mtslink + seichannel + multipath` is the recommended MTS Link VPN path.
+- `mtslink + seichannel` is the recommended MTS Link VPN path (single channel; multipath was removed as unstable).
 - `videochannel` remains available for diagnostics and legacy visual transport
   profiles when an ffmpeg-backed core is bundled.
 
@@ -63,45 +63,34 @@ branch: mtslink-universal-carrier
 
 MTS Link joins a public room as a guest and negotiates the H.264/Opus media
 shape expected by the service. Normal VPN traffic should use `seichannel`,
-which carries data in H.264 SEI payloads. Browser traffic should use
-`mc-lanes=12` or a similar 10-16 lane profile so the client can spread SOCKS
-streams across several independent MTS Link guest bots. `videochannel` is kept
-for diagnostics and legacy visible-video tests.
+which carries data in H.264 SEI payloads. Single-channel mode is the only
+supported and tested configuration. `videochannel` is kept for diagnostics
+and legacy visible-video tests.
 
-Android `1.9.5` adds the dark live dashboard from the redesign: status badge,
-session traffic counter, transport chips, metrics cards, profile cards with
-signal bars, event log, and bottom navigation. The profile storage format is
-unchanged.
+Android `1.10.0` brings the v3 graphite-dark + electric-blue + lime design:
+download-speed hero (live rate replaces session-bytes counter), lime signal
+bars, blue connect gradient, v3 palette throughout. Multipath (mc-lanes etc.)
+is removed; SEI runs single-channel.
 
-### What changed in this drop
+Windows `0.6.0-beta` mirrors the Android v3 palette, adds 4-metric cards and
+transport chips to the home page, adds a live rail footer (SOCKS / Route mode /
+Core state), and fixes the blank-UI bug when the boot API calls throw.
 
-- **Transport chips are interactive.** Tapping `SEI / VP8 / Data / Video` now
-  rewrites the active profile's URI through `rewriteTransport`, persists it,
-  and restarts the VPN if it was running. The chips used to be decorative
-  (`setClickable(false)`).
-- **Pre-tunnel DNS works again.** `OlcVpnService.runVpnOnce` calls
-  `olc.setAutoDNS(...)` without try-catch; the matching `SetAutoDNS` /
-  `GetAutoDNSUpstream` symbols now exist on the Go side (mtsRTC). Without
-  them the VPN crashed on every start with `NoSuchMethodException`.
-- **`videochannel` no longer collapses to VP8.** `normalizeTransport` accepts
-  `videochannel` and its aliases. `OlcMobileBridge.applyCarrierRuntimeOptions`
-  no longer applies the SEI-calibrated `traffic-max-payload` floor to
-  videochannel/vp8channel paths (it would have truncated H.264 access units
-  in the crypto layer).
-- **SEI defaults aligned with the Go runtime.** `OlcVpnService.seiBatch /
-  seiFrag / seiAckMs` now default to `8 / 700 / 10000` for every carrier,
-  matching `mobile.go`. Previously non-mtslink carriers sent `batch=64,
-  ack-ms=2000`, while Go expected `batch=8, ack-ms=10000`.
-- **Settings tab is transport-aware.** Fragment/ack/multipath fields are only
-  rendered for `seichannel` (and multipath fields only when the carrier is
-  `mtslink`), so opening a VP8 profile no longer stamps `mc-lanes=12` into
-  the URI on save.
-- **Palette extracted into one place.** The dashboard's hex literals now live
-  as `COLOR_*` constants in `MainActivity` so retheming is a single-file edit.
-- **Traffic tab labelled as approximate.** The metrics come from
-  `TrafficStats.getUidRxBytes/TxBytes`, which include the app's own
-  background traffic (probes, DNS, HTTP pings), so the panel header now warns
-  the user.
+### What changed since 1.9.5 / 0.5.5
+
+- **v3 design palette.** Graphite-dark `#0E1014`, electric-blue `#2D7DFF`,
+  lime `#C9FF3D`. Hero download-speed arrow is lime. Connect button is blue
+  gradient. Signal bars glow lime when active.
+- **Single seichannel.** `mc-lanes`, `mc-control-lanes`, `mc-connect-parallel`,
+  `mc-min-ready`, `mc-max-streams-per-lane` and the traffic-shaping params are
+  removed from all UI, `defaultTransportSpec`, `saveSettings`, and the Windows
+  YAML builder. Multipath proved unreliable; single channel is stable.
+- **Home speed hero.** The big 46 sp number now shows live download rate
+  (Android) / is labelled with the speed value (Windows), not session bytes.
+- **Boot crash fix (Windows).** `boot()` is now wrapped in try/catch so a
+  failing `api.*` call no longer leaves the renderer blank.
+- **Rail footer (Windows).** Shows SOCKS address, current route mode, and core
+  running state at all times.
 
 See [MTSLINK.md](MTSLINK.md) for the server YAML, URI examples, and diagnostics.
 
@@ -133,7 +122,7 @@ powershell -ExecutionPolicy Bypass -File scripts/build_windows.ps1
 Output:
 
 ```text
-dist/windows/XLTD_Vpn-Windows-0.5.5-beta-win-x64.zip
+dist/windows/XLTD_Vpn-Windows-0.6.0-beta-win-x64.zip
 ```
 
 The Windows package includes:
@@ -162,5 +151,5 @@ The Windows package includes:
   `XLTD_Vpn-Windows`.
 - olcRTC fork repository: `mtsRTC`.
 - MTS carrier name in links and configs: `mtslink`.
-- Stable Android releases: `v1.9.x`.
-- Windows beta releases: `windows-v0.5.x-beta`.
+- Stable Android releases: `v1.10.x`.
+- Windows beta releases: `windows-v0.6.x-beta`.

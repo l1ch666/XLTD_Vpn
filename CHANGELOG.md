@@ -1,6 +1,55 @@
 # Changelog
 
-## Unreleased
+## Unreleased — v3 Design / Single SEI channel
+
+### Android 1.10.0
+
+- **v3 palette applied.** All colours migrated to the v3 graphite-dark + electric-blue
+  (`#2D7DFF`) + lime (`#C9FF3D`) design system. Background `#0E1014`, surface
+  `#181B22`, border `#262A33`; SEI/OK signal is now lime, connect button is a blue
+  gradient `#4F8BFF → #1A5FE0`, signal bars glow lime when active.
+- **Hero shows download speed.** The home screen hero now displays the live
+  download rate (e.g. `12.4 MB/s`) as the primary 46 sp metric with a lime `↓`
+  arrow, replacing the session-bytes counter. Session total is shown as a smaller
+  sub-label.
+- **Single seichannel — multipath removed.** All `mc-lanes`, `mc-control-lanes`,
+  `mc-connect-parallel`, `mc-min-ready`, `mc-max-streams-per-lane` settings and
+  their corresponding `traffic-max-payload / min-delay / max-delay` shaping params
+  are gone from the Settings tab, `saveSettings()`, and `defaultTransportSpec()`.
+  New SEI profiles no longer carry `mc-lanes=12`. Existing saved profiles with those
+  params continue to parse and connect — they just won't be shown or re-injected.
+- **`activeTransportLabel()` simplified.** The label now returns `"SEI"` for
+  seichannel instead of `"SEI · N lanes"`. `profileMeta()` for SEI no longer shows
+  `lanes=N`.
+- **Nav items use muted text for inactive state** instead of the nearly-invisible
+  border-grey.
+- **`telemetryLanes` field retained** (read from broadcast) but no longer surfaced
+  anywhere in the UI. The `txDelta` metric label always reads `"один канал"`.
+- **Bug fix — boot try/catch (Android).** `onStart()` calls `renderActiveTab()`
+  which could crash if any view reference was stale after a configuration change.
+  The `renderActiveTab()` null-guards remain; no regression introduced.
+
+### Windows 0.6.0-beta
+
+- **v3 palette applied.** CSS `:root` variables updated — primary `#2D7DFF`, ok/lime
+  `#C9FF3D`, bg `#0E1014`, surface `#181B22`, border `#262A33`. `main.js`
+  `backgroundColor` updated to match.
+- **Home page `Канал жив.`** page head added above the hero. Transport chips row
+  added below the status hero. 4-metric grid (↓/↑/latency/uptime) now rendered on
+  the Home tab, not only on Traffic.
+- **Lime `↓` arrow** in the hero speed display (`color:var(--ok)`).
+- **Rail footer** now shows SOCKS address + Route mode + Core state (stopped /
+  connecting / connected). The title-bar center label updates to the active carrier
+  name when connected.
+- **`boot()` wrapped in try/catch.** If any `await api.*` call fails on startup the
+  UI still renders with defaults instead of staying blank.
+- **Single seichannel — multipath removed from YAML builder.** The `multipath:`
+  section (`lanes`, `control_lanes`, `connect_parallelism`, `min_ready`,
+  `max_streams_per_lane`) and the `traffic:` shaping block are no longer emitted for
+  any config. `buildYaml()` in `services/core.js` is ~25 lines shorter.
+- **`updateRailFooter()`** keeps the rail in sync after every connect/disconnect and
+  tab switch without a full page re-render.
+- **Sparkline bars** use lime gradient (`--ok → #8FCC00`) when active.
 
 - **VPN bootstrap restored.** `OlcVpnService.runVpnOnce` calls
   `olc.setAutoDNS(...)` to pick a pre-tunnel DNS upstream; the matching

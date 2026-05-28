@@ -69,33 +69,6 @@ function buildYaml(config, socksPort) {
     `  failures: ${intParam(config, 'liveness-failures', 3)}`,
   ];
 
-  // traffic section
-  const fragSize   = intParam(config, 'frag', intParam(config, 'sei-frag', 700));
-  const payloadFloor = isMtsLink ? Math.max(1600, fragSize * 8) : 0;
-  let maxPayload = intParam(config, 'traffic-max-payload', payloadFloor);
-  if (isMtsLink && maxPayload > 0 && maxPayload < payloadFloor) maxPayload = payloadFloor;
-  const minDelay = strParam(config, 'traffic-min-delay', isMtsLink ? '4ms'  : '');
-  const maxDelay = strParam(config, 'traffic-max-delay', isMtsLink ? '18ms' : '');
-  if (maxPayload > 0 || minDelay || maxDelay) {
-    lines.push('traffic:');
-    if (maxPayload > 0) lines.push(`  max_payload_size: ${maxPayload}`);
-    if (minDelay)       lines.push(`  min_delay: ${yaml(minDelay)}`);
-    if (maxDelay)       lines.push(`  max_delay: ${yaml(maxDelay)}`);
-  }
-
-  // multipath
-  if (isMtsLink && config.transport === TRANSPORT_SEI) {
-    const lanes = intParam(config, 'mc-lanes', intParam(config, 'sei-lanes', intParam(config, 'lanes', 1)));
-    if (lanes > 1) {
-      lines.push('multipath:');
-      lines.push(`  lanes: ${lanes}`);
-      lines.push(`  control_lanes: ${intParam(config, 'mc-control-lanes', 1)}`);
-      lines.push(`  connect_parallelism: ${intParam(config, 'mc-connect-parallel', intParam(config, 'mc-connect-parallelism', 2))}`);
-      lines.push(`  min_ready: ${intParam(config, 'mc-min-ready', Math.min(4, lanes))}`);
-      lines.push(`  max_streams_per_lane: ${intParam(config, 'mc-max-streams-per-lane', 3)}`);
-    }
-  }
-
   // transport-specific
   if (config.transport === TRANSPORT_VP8) {
     lines.push('vp8:');
