@@ -1,5 +1,46 @@
 # Changelog
 
+## Unreleased — v2.0.0 Flutter migration (in progress)
+
+The Android and Windows clients are migrating from Java / Electron to a single
+Flutter codebase at `flutter_app/`. The Go core (mtsRTC) and the Android VPN
+service (`OlcVpnService.java`) are unchanged — only the UI layer is rewritten.
+
+**Scope**
+
+- New Flutter project at `flutter_app/` targeting Android + Windows desktop.
+- Dart port of the `olcrtc://` URI parser (`lib/services/uri_parser.dart`).
+- v3 design system (`lib/theme/`): graphite + electric-blue + lime palette,
+  shared widgets (`HeroStatus`, `MetricCard`, `TransportChip`, `ProfileRow`,
+  `EventRow`, `Sparkline`, `SideNav`, `BottomNav`, `TitleBar`).
+- Screens: Home, Profiles, Traffic, Settings, Log.
+- Adaptive shell — side rail on Windows, bottom nav on Android.
+- Android MethodChannel bridge (`MainActivity.java` → `OlcVpnService`):
+  control via `com.s1dechain.olcrtcvpn/control`, telemetry over
+  `…/telemetry` EventChannel, runtime log over `…/log` EventChannel.
+- Windows core bridge — spawns `olcrtc.exe`, parses stdout, polls SOCKS
+  handshake for readiness (port of `services/core.js`).
+- Profile store migration — legacy `mc-*` and `traffic-*` params are stripped
+  from saved profiles on first load.
+- `scripts/build_apk.ps1` rewritten to drive `flutter build apk`.
+
+**Carry-over**
+
+- Existing Java VPN service (`OlcVpnService.java`, `OlcMobileBridge.java`,
+  `OlcUriParser.java`, etc.) reused verbatim under `flutter_app/android/app/`.
+- The old `app/` and `windows/electron-app/` trees remain in the repo until
+  the Flutter builds reach feature parity, then will be removed.
+
+**Open issues tracked for the Flutter release**
+
+- Full-tunnel routing service (Windows): Wintun + tun2socks lifecycle still
+  needs to be ported from Electron — fixes the "no websites load" report.
+- Android telemetry baseline: speed/uptime start updating only ~7–15 s after
+  STATE_CONNECTED because the TrafficStats baseline isn't reset on
+  tunEstablished.
+- Reconnect storm: requires verbose liveness logging on the client side and
+  matching liveness defaults across Android, Windows, and the Go core.
+
 ## Unreleased — v3 Design / Single SEI channel
 
 ### Android 1.10.0

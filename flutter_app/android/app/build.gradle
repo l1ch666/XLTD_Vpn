@@ -1,0 +1,54 @@
+plugins {
+    id "com.android.application"
+    id "dev.flutter.flutter-gradle-plugin"
+}
+
+android {
+    namespace = "com.s1dechain.olcrtcvpn"
+    compileSdk = 35
+    ndkVersion = flutter.ndkVersion
+
+    defaultConfig {
+        applicationId = "com.s1dechain.olcrtcvpn"
+        minSdk = 23
+        // Keep target 28 — matches the local-MVP foreground-service contract
+        // used by OlcVpnService. Raise later when a production FGS policy lands.
+        targetSdk = 28
+        versionCode = 25
+        versionName = "2.0.0-flutter"
+    }
+
+    sourceSets {
+        main {
+            jniLibs.srcDirs = ['src/main/jniLibs']
+        }
+    }
+
+    compileOptions {
+        sourceCompatibility = JavaVersion.VERSION_11
+        targetCompatibility = JavaVersion.VERSION_11
+    }
+
+    packagingOptions {
+        jniLibs {
+            useLegacyPackaging = true
+        }
+    }
+
+    buildTypes {
+        release {
+            // Debug-signed for now; user replaces with real key for production.
+            signingConfig = signingConfigs.debug
+        }
+    }
+}
+
+flutter {
+    source = "../.."
+}
+
+dependencies {
+    // Local olcRTC combo AAR (gomobile + tun2socks).
+    // The Java code uses reflection, so the build succeeds even when missing.
+    implementation fileTree(dir: 'libs', include: ['*.aar', '*.jar'])
+}

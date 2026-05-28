@@ -13,3 +13,17 @@ windows/**/tools/
 local.properties
 *.iml
 .DS_Store
+
+# Flutter project — generated artefacts
+flutter_app/.dart_tool/
+flutter_app/.idea/
+flutter_app/build/
+flutter_app/android/.gradle/
+flutter_app/android/build/
+flutter_app/android/app/build/
+flutter_app/android/app/libs/*.aar
+flutter_app/android/app/libs/*-sources.jar
+flutter_app/android/app/src/main/jniLibs/
+flutter_app/windows/build/
+flutter_app/windows/flutter/ephemeral/
+flutter_app/android/local.properties
