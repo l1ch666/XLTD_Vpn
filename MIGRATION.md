@@ -136,8 +136,8 @@ Once VS 2022 is on the box, `flutter build windows --release` will emit
 | Profile migration (drop `mc-*`) | ✅ | `stripLegacyMultipath()` |
 | URI parser feature parity | ✅ | covered by smoke test |
 | Windows desktop builds | ❌ Blocked | install VS 2022 |
-| Windows full tunnel (Wintun + tun2socks) | ⚠ Stub | spawning + routing not yet ported |
-| Windows DNS leak fix | ⚠ Pending | dependent on full-tunnel rewrite |
+| Windows full tunnel (Wintun + tun2socks) | ✅ Code-complete | `WindowsRouteService` — spawn tun2socks, add host-route exclusions for VPN server + DNS, set Wintun-adapter DNS, restore on stop |
+| Windows DNS leak fix | ✅ Code-complete | DNS upstream is added as an excluded host-route and locked on the Wintun adapter so OS resolvers stay through the tunnel |
 | Reconnect-storm verbose logging | ⚠ Pending | needs liveness ping/pong trace |
 | `flutter run` hot reload on Windows | ⚠ Blocked | Developer Mode disabled (needs admin) |
 

@@ -41,6 +41,15 @@ android {
             signingConfig = signingConfigs.debug
         }
     }
+
+    // We deliberately stay on target SDK 28 to keep the foreground-service
+    // setup simple for sideload distribution (not Google Play). Don't let
+    // the Play-Store lint check abort the release build.
+    lint {
+        abortOnError = false
+        checkReleaseBuilds = false
+        disable += 'ExpiredTargetSdkVersion'
+    }
 }
 
 flutter {

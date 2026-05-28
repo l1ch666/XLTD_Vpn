@@ -10,6 +10,7 @@ import '../models/olc_config.dart';
 import '../models/transport.dart';
 import 'uri_parser.dart';
 import 'vpn_bridge.dart';
+import 'windows_route_service.dart';
 
 /// Windows implementation: spawns `olcrtc.exe` directly, parses stdout for
 /// status hints, and polls a SOCKS handshake to detect readiness.
@@ -21,6 +22,8 @@ class WindowsVpnBridge implements VpnBridge {
   DateTime? _connectedAt;
   int _routeMode = 0;
   int _latency = -1;
+  late final WindowsRouteService _route =
+      WindowsRouteService((e) => _events.add(e));
 
   TelemetrySnapshot _last = TelemetrySnapshot.empty;
   final _telemetry = StreamController<TelemetrySnapshot>.broadcast();
@@ -88,12 +91,28 @@ class WindowsVpnBridge implements VpnBridge {
     _emit(_last.copyWith(state: VpnState.connected));
     _addLog('OK', 'tunnel active · SOCKS5 $_socksHost:$_socksPort');
     _startTelemetryTimer();
+
+    if (_routeMode == 2) {
+      try {
+        await _route.start(
+          socksHost: _socksHost,
+          socksPort: _socksPort,
+          excludeHosts: [cfg.roomId, cfg.carrier],
+          dnsUpstream: cfg.strParam('dns', _defaultDns),
+        );
+      } catch (e) {
+        _addLog('ERR', 'full tunnel: $e');
+      }
+    }
   }
 
   @override
   Future<void> stop() async {
     _telemetryTimer?.cancel();
     _telemetryTimer = null;
+    if (_route.isRunning) {
+      try { await _route.stop(); } catch (_) {}
+    }
     final proc = _proc;
     _proc = null;
     if (proc != null) {

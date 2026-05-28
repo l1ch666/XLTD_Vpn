@@ -1,285 +1,88 @@
 param(
-    [string]$Runtime = "win-x64",
-    [switch]$SelfContained
+    [ValidateSet('debug', 'release')]
+    [string]$Mode = 'release'
 )
+
+# Build the XLTD VPN Windows desktop app from the Flutter project.
+#
+# Prerequisites
+#   * Flutter SDK on PATH (or installed at C:\src\flutter).
+#   * Visual Studio 2022 with "Desktop development with C++" workload.
+#     Flutter 3.24.5 does not yet recognise Visual Studio Build Tools 2026.
+#   * Developer Mode is NOT required for `flutter build`; it IS required for
+#     `flutter run` (plugin builds use symlinks).
+#   * Go (for `olcrtc.exe`), and downloaded `wintun.dll`, `tun2socks.exe`,
+#     `ffmpeg.exe` next to the built executable under `tools\`.
 
 $ErrorActionPreference = "Stop"
 $env:DOTNET_CLI_TELEMETRY_OPTOUT = "1"
-$env:DOTNET_NOLOGO = "1"
 
 $projectRoot = Split-Path -Parent $PSScriptRoot
-$version = "0.5.5-beta"
-$project = Join-Path $projectRoot "windows\XLTD.Vpn.Windows\XLTD.Vpn.Windows.csproj"
-$projectDir = Split-Path -Parent $project
-$toolsDir = Join-Path $projectDir "tools"
-$olcrtcSource = Join-Path $projectRoot ".external\olcrtc"
-$olcrtcRepo = if ($env:OLC_REPO) { $env:OLC_REPO } else { "https://github.com/l1ch666/mtsRTC.git" }
-$olcrtcRef = if ($env:OLC_REF) { $env:OLC_REF } else { "mtslink-universal-carrier" }
-$tun2socksSource = Join-Path $projectRoot ".external\tun2socks"
-$ffmpegCacheDir = Join-Path $projectRoot ".external\ffmpeg"
-$ffmpegZip = Join-Path $ffmpegCacheDir "ffmpeg-release-essentials.zip"
-$ffmpegExtractDir = Join-Path $ffmpegCacheDir "extract"
-$ffmpegUrl = "https://www.gyan.dev/ffmpeg/builds/ffmpeg-release-essentials.zip"
-$wintunCacheDir = Join-Path $projectRoot ".external\wintun"
-$wintunZip = Join-Path $wintunCacheDir "wintun-0.14.1.zip"
-$wintunExtractDir = Join-Path $wintunCacheDir "extract"
-$wintunUrl = "https://www.wintun.net/builds/wintun-0.14.1.zip"
-$olcrtcPatches = if ($env:OLC_PATCHES) { $env:OLC_PATCHES -split ";" } else { @() }
-$distRoot = Join-Path $projectRoot "dist\windows"
-$publishDir = Join-Path $distRoot "XLTD_Vpn_Windows-$version-$Runtime"
-$zipPath = Join-Path $distRoot "XLTD_Vpn-Windows-$version-$Runtime.zip"
+$flutterApp  = Join-Path $projectRoot 'flutter_app'
+$flutterBin  = 'C:\src\flutter\bin'
 
-function Assert-InWorkspace([string]$Path) {
-    $root = [System.IO.Path]::GetFullPath($projectRoot)
-    $resolved = [System.IO.Path]::GetFullPath($Path)
-    if (-not $resolved.StartsWith($root, [System.StringComparison]::OrdinalIgnoreCase)) {
-        throw "Refusing to operate outside workspace: $resolved"
-    }
+if (Test-Path $flutterBin) {
+    $env:Path = "$flutterBin;$env:Path"
 }
 
-function Reset-Directory([string]$Path) {
-    Assert-InWorkspace $Path
-    if (Test-Path $Path) {
-        Remove-Item -LiteralPath $Path -Recurse -Force
-    }
-    New-Item -ItemType Directory -Force -Path $Path | Out-Null
+$flutter = Get-Command flutter -ErrorAction SilentlyContinue
+if (-not $flutter) {
+    throw 'flutter not on PATH. Install Flutter SDK or add C:\src\flutter\bin.'
 }
 
-function Resolve-Ffmpeg {
-    if ($env:FFMPEG_PATH -and (Test-Path $env:FFMPEG_PATH)) {
-        return (Resolve-Path $env:FFMPEG_PATH).Path
-    }
-
-    $command = Get-Command ffmpeg -ErrorAction SilentlyContinue
-    if ($command -and $command.Source -and (Test-Path $command.Source)) {
-        return $command.Source
-    }
-
-    $cached = Join-Path $ffmpegCacheDir "ffmpeg.exe"
-    if (Test-Path $cached) {
-        return $cached
-    }
-
-    New-Item -ItemType Directory -Force -Path $ffmpegCacheDir | Out-Null
-    if (-not (Test-Path $ffmpegZip)) {
-        Write-Host "Downloading ffmpeg for videochannel support..."
-        Invoke-WebRequest -Uri $ffmpegUrl -OutFile $ffmpegZip
-    }
-
-    Reset-Directory $ffmpegExtractDir
-    Expand-Archive -LiteralPath $ffmpegZip -DestinationPath $ffmpegExtractDir -Force
-    $ffmpeg = Get-ChildItem -Path $ffmpegExtractDir -Recurse -Filter ffmpeg.exe | Select-Object -First 1
-    if (-not $ffmpeg) {
-        throw "Downloaded ffmpeg archive did not contain ffmpeg.exe"
-    }
-
-    Copy-Item $ffmpeg.FullName $cached -Force
-    return $cached
-}
-
-function Resolve-WintunDll {
-    if ($env:WINTUN_DLL_PATH -and (Test-Path $env:WINTUN_DLL_PATH)) {
-        return (Resolve-Path $env:WINTUN_DLL_PATH).Path
-    }
-
-    $arch = switch -Regex ($Runtime) {
-        "arm64" { "arm64"; break }
-        "x86" { "x86"; break }
-        default { "amd64" }
-    }
-
-    $knownPaths = @(
-        (Join-Path $wintunCacheDir "wintun.dll"),
-        (Join-Path $wintunCacheDir "bin\$arch\wintun.dll"),
-        (Join-Path $wintunExtractDir "wintun\bin\$arch\wintun.dll"),
-        (Join-Path $projectRoot ".external\tun2socks\wintun.dll"),
-        (Join-Path $projectDir "tools\wintun.dll")
-    )
-
-    foreach ($candidate in $knownPaths) {
-        if (Test-Path $candidate) {
-            return (Resolve-Path $candidate).Path
-        }
-    }
-
-    New-Item -ItemType Directory -Force -Path $wintunCacheDir | Out-Null
-    if (-not (Test-Path $wintunZip)) {
-        Write-Host "Downloading Wintun for full tunnel support..."
-        Invoke-WebRequest -Uri $wintunUrl -OutFile $wintunZip
-    }
-
-    Reset-Directory $wintunExtractDir
-    Expand-Archive -LiteralPath $wintunZip -DestinationPath $wintunExtractDir -Force
-    $wintun = Get-ChildItem -Path $wintunExtractDir -Recurse -Filter wintun.dll |
-        Where-Object { $_.FullName -match "\\bin\\$arch\\wintun\.dll$" } |
-        Select-Object -First 1
-    if (-not $wintun) {
-        $wintun = Get-ChildItem -Path $wintunExtractDir -Recurse -Filter wintun.dll | Select-Object -First 1
-    }
-    if (-not $wintun) {
-        throw "Downloaded Wintun archive did not contain wintun.dll"
-    }
-
-    $cached = Join-Path $wintunCacheDir "wintun.dll"
-    Copy-Item $wintun.FullName $cached -Force
-    return $cached
-}
-
-function Apply-GitPatchIfNeeded([string]$Repo, [string]$Patch) {
-    if (-not (Test-Path $Patch)) {
-        return
-    }
-
-    Push-Location $Repo
-    try {
-        $previousErrorActionPreference = $ErrorActionPreference
-        $ErrorActionPreference = "Continue"
-        & git apply --check $Patch *> $null
-        $applyCode = $LASTEXITCODE
-        $ErrorActionPreference = $previousErrorActionPreference
-        if ($applyCode -eq 0) {
-            Write-Host "Applying local olcRTC compatibility patch: $Patch"
-            & git apply $Patch
-            if ($LASTEXITCODE -ne 0) {
-                throw "git apply failed with exit code $LASTEXITCODE"
-            }
-            return
-        }
-
-        $previousErrorActionPreference = $ErrorActionPreference
-        $ErrorActionPreference = "Continue"
-        & git apply --reverse --check --ignore-space-change --ignore-whitespace $Patch *> $null
-        $reverseCode = $LASTEXITCODE
-        $ErrorActionPreference = $previousErrorActionPreference
-        if ($reverseCode -eq 0) {
-            Write-Host "Local olcRTC compatibility patch already applied."
-            return
-        }
-
-        throw "Local olcRTC compatibility patch does not apply cleanly: $Patch"
-    } finally {
-        Pop-Location
-    }
-}
-
-function Ensure-OlcRtcSource {
-    if (-not (Test-Path (Join-Path $olcrtcSource ".git"))) {
-        New-Item -ItemType Directory -Force -Path (Split-Path -Parent $olcrtcSource) | Out-Null
-        Write-Host "Cloning olcRTC ref $olcrtcRef from $olcrtcRepo..."
-        & git clone --branch $olcrtcRef --recurse-submodules $olcrtcRepo $olcrtcSource
-        if ($LASTEXITCODE -ne 0) {
-            throw "git clone olcrtc failed with exit code $LASTEXITCODE"
-        }
-        return
-    }
-
-    Push-Location $olcrtcSource
-    try {
-        $currentUrl = (& git remote get-url origin 2>$null)
-        if ($currentUrl -ne $olcrtcRepo) {
-            & git remote set-url origin $olcrtcRepo
-            if ($LASTEXITCODE -ne 0) {
-                throw "git remote set-url failed with exit code $LASTEXITCODE"
-            }
-        }
-
-        & git fetch origin $olcrtcRef
-        if ($LASTEXITCODE -ne 0) {
-            throw "git fetch olcrtc ref $olcrtcRef failed with exit code $LASTEXITCODE"
-        }
-
-        & git show-ref --verify --quiet "refs/heads/$olcrtcRef"
-        if ($LASTEXITCODE -eq 0) {
-            & git checkout $olcrtcRef
-        } else {
-            & git checkout -b $olcrtcRef "origin/$olcrtcRef"
-        }
-        if ($LASTEXITCODE -ne 0) {
-            throw "git checkout olcrtc ref $olcrtcRef failed with exit code $LASTEXITCODE"
-        }
-
-        & git pull --ff-only origin $olcrtcRef
-        if ($LASTEXITCODE -ne 0) {
-            Write-Warning "Could not fast-forward olcrtc source; using checked out tree as-is."
-        }
-
-        & git submodule update --init --recursive
-        if ($LASTEXITCODE -ne 0) {
-            Write-Warning "Could not update olcrtc submodules; continuing with existing checkout."
-        }
-    } finally {
-        Pop-Location
-    }
-}
-
-if (-not (Get-Command go -ErrorAction SilentlyContinue)) {
-    throw "Go is required to build olcrtc.exe"
-}
-
-if (-not (Get-Command dotnet -ErrorAction SilentlyContinue)) {
-    throw ".NET SDK is required to build the Windows GUI"
-}
-
-Ensure-OlcRtcSource
-
-if (-not (Test-Path $tun2socksSource)) {
-    throw "Missing local tun2socks source at $tun2socksSource. Rebuild/fetch .external first."
-}
-
-foreach ($patch in $olcrtcPatches) {
-    Apply-GitPatchIfNeeded $olcrtcSource $patch
-}
-
-$ffmpegSource = Resolve-Ffmpeg
-$wintunSource = Resolve-WintunDll
-
-Reset-Directory $toolsDir
-New-Item -ItemType Directory -Force -Path (Join-Path $toolsDir "data") | Out-Null
-
-Push-Location $olcrtcSource
+Push-Location $flutterApp
 try {
-    $olcrtcExe = Join-Path $toolsDir "olcrtc.exe"
-    & go build -trimpath -ldflags "-s -w" -o $olcrtcExe ".\cmd\olcrtc"
-    if ($LASTEXITCODE -ne 0) {
-        throw "go build olcrtc failed with exit code $LASTEXITCODE"
+    Write-Host "Resolving Flutter dependencies..."
+    & flutter pub get
+    if ($LASTEXITCODE -ne 0) { throw "flutter pub get failed ($LASTEXITCODE)" }
+
+    Write-Host "Building $Mode Windows desktop..."
+    if ($Mode -eq 'release') {
+        & flutter build windows --release
+    } else {
+        & flutter build windows --debug
     }
+    if ($LASTEXITCODE -ne 0) {
+        throw "flutter build windows failed ($LASTEXITCODE)`n" +
+              "If the error mentions 'Visual Studio 16 2019 could not find any instance of Visual Studio' " +
+              "install Visual Studio Community 2022 with the 'Desktop development with C++' workload."
+    }
+
+    $pubspec = Get-Content 'pubspec.yaml' -Raw
+    $version = [regex]::Match($pubspec, '(?m)^version:\s*(.+)$').Groups[1].Value.Trim()
+    if (-not $version) { $version = 'unknown' }
+    $version = $version -replace '\+.*$', ''
+
+    $runnerDir = if ($Mode -eq 'release') {
+        'build\windows\x64\runner\Release'
+    } else {
+        'build\windows\x64\runner\Debug'
+    }
+    if (-not (Test-Path $runnerDir)) { throw "build output not found at $runnerDir" }
+
+    # Copy tools/ next to xltd_vpn.exe.
+    $tools = Join-Path $runnerDir 'tools'
+    if (Test-Path $tools) { Remove-Item -LiteralPath $tools -Recurse -Force }
+    New-Item -ItemType Directory -Force -Path $tools | Out-Null
+
+    $electronTools = Join-Path $projectRoot 'windows\electron-app\tools'
+    if (Test-Path $electronTools) {
+        Write-Host "Copying tools from existing Electron build..."
+        Copy-Item -Path (Join-Path $electronTools '*') -Destination $tools -Recurse -Force
+    } else {
+        Write-Warning "tools/ not bundled — run scripts\fetch_windows_tools.ps1 first or copy olcrtc.exe + tun2socks.exe + wintun.dll + ffmpeg.exe to $tools manually."
+    }
+
+    $dist = Join-Path $projectRoot 'dist\windows'
+    New-Item -ItemType Directory -Force -Path $dist | Out-Null
+    $zip = Join-Path $dist "XLTD_Vpn-Windows-$version-$Mode-win-x64.zip"
+    if (Test-Path $zip) { Remove-Item -LiteralPath $zip -Force }
+
+    Compress-Archive -Path (Join-Path $runnerDir '*') -DestinationPath $zip -Force
+    $hash = Get-FileHash $zip -Algorithm SHA256
+    Write-Host "Windows package: $zip"
+    Write-Host "SHA256: $($hash.Hash.ToLowerInvariant())"
+    Write-Host "Size  : $([math]::Round((Get-Item $zip).Length / 1MB, 2)) MB"
 } finally {
     Pop-Location
 }
-
-Push-Location $tun2socksSource
-try {
-    $tun2socksExe = Join-Path $toolsDir "tun2socks.exe"
-    & go build -trimpath -ldflags "-s -w" -o $tun2socksExe "."
-    if ($LASTEXITCODE -ne 0) {
-        throw "go build tun2socks failed with exit code $LASTEXITCODE"
-    }
-} finally {
-    Pop-Location
-}
-
-Copy-Item (Join-Path $olcrtcSource "data\names") (Join-Path $toolsDir "data\names") -Force
-Copy-Item (Join-Path $olcrtcSource "data\surnames") (Join-Path $toolsDir "data\surnames") -Force
-Copy-Item $ffmpegSource (Join-Path $toolsDir "ffmpeg.exe") -Force
-Copy-Item $wintunSource (Join-Path $toolsDir "wintun.dll") -Force
-
-Reset-Directory $publishDir
-
-$selfContainedValue = if ($SelfContained) { "true" } else { "false" }
-& dotnet publish $project -c Release -r $Runtime --self-contained $selfContainedValue -o $publishDir
-if ($LASTEXITCODE -ne 0) {
-    throw "dotnet publish failed with exit code $LASTEXITCODE"
-}
-
-Copy-Item $toolsDir (Join-Path $publishDir "tools") -Recurse -Force
-
-if (Test-Path $zipPath) {
-    Assert-InWorkspace $zipPath
-    Remove-Item -LiteralPath $zipPath -Force
-}
-
-Compress-Archive -Path (Join-Path $publishDir "*") -DestinationPath $zipPath -Force
-$hash = Get-FileHash $zipPath -Algorithm SHA256
-
-Write-Host "Windows package: $zipPath"
-Write-Host "SHA256: $($hash.Hash.ToLowerInvariant())"
