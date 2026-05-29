@@ -3,35 +3,51 @@ import 'package:flutter/material.dart';
 import '../models/profile.dart';
 import '../models/transport.dart';
 import '../theme/colors.dart';
-import 'panel.dart';
+import '../theme/theme.dart';
+import 'app_icon.dart';
+import 'signal_bars.dart';
 
 /// One profile in the home list / profiles screen.
+///
+/// `_design_drop` profile row: active dot + 32×32 SVG glyph tile + title/meta +
+/// trailing signal bars (home/compact) or an "изменить" action (profiles/full).
 class ProfileRow extends StatelessWidget {
   final Profile profile;
   final bool active;
   final VoidCallback onTap;
+  final VoidCallback? onEdit;
   final VoidCallback? onLongPress;
+
+  /// Signal-bar quality level 1..4 (compact mode only). Defaults from state.
+  final int? level;
 
   const ProfileRow({
     super.key,
     required this.profile,
     required this.active,
     required this.onTap,
+    this.onEdit,
     this.onLongPress,
+    this.level,
   });
 
   @override
   Widget build(BuildContext context) {
-    final icon = _iconFor(profile.transport);
-    final accent =
-        profile.transport == Transport.sei ? AppColors.ok : AppColors.primary;
+    final meta = _metaLine(profile);
 
     return GestureDetector(
+      onTap: onTap,
       onLongPress: onLongPress,
-      child: Panel(
-        padding: const EdgeInsets.fromLTRB(12, 12, 12, 12),
-        onTap: onTap,
-        selected: active,
+      behavior: HitTestBehavior.opaque,
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 9),
+        decoration: BoxDecoration(
+          color: AppColors.surface,
+          border: Border.all(
+            color: active ? AppColors.lineStrong : AppColors.line,
+          ),
+          borderRadius: BorderRadius.circular(14),
+        ),
         child: Row(
           children: [
             // active dot
@@ -39,106 +55,94 @@ class ProfileRow extends StatelessWidget {
               width: 8,
               height: 8,
               decoration: BoxDecoration(
-                color: active ? accent : AppColors.border,
+                color: active ? AppColors.ok : AppColors.line,
                 shape: BoxShape.circle,
+                boxShadow:
+                    active ? [const BoxShadow(color: AppColors.ok, blurRadius: 8)] : null,
               ),
             ),
-            const SizedBox(width: 12),
+            const SizedBox(width: 9),
+            // glyph tile
             Container(
-              width: 36,
-              height: 36,
+              width: 32,
+              height: 32,
               decoration: BoxDecoration(
-                color: AppColors.bgAlt,
-                border: Border.all(color: AppColors.border),
+                color: AppColors.surfaceAlt,
                 borderRadius: BorderRadius.circular(10),
               ),
               alignment: Alignment.center,
-              child: Icon(icon, size: 16, color: accent),
+              child: AppIcon(
+                AppIcon.transportAsset(profile.transport),
+                size: 18,
+                color: AppColors.primaryLt,
+              ),
             ),
-            const SizedBox(width: 12),
+            const SizedBox(width: 11),
             Expanded(
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 mainAxisSize: MainAxisSize.min,
                 children: [
-                  Row(
-                    children: [
-                      Flexible(
-                        child: Text(
-                          '${profile.carrier} · ${Transport.label(profile.transport)}',
-                          maxLines: 1,
-                          overflow: TextOverflow.ellipsis,
-                          style: const TextStyle(
-                            fontSize: 14,
-                            fontWeight: FontWeight.w600,
-                            color: AppColors.text,
-                          ),
-                        ),
-                      ),
-                    ],
-                  ),
-                  const SizedBox(height: 2),
                   Text(
-                    profile.comment.isEmpty ? profile.transport : profile.comment,
+                    '${_displayCarrier(profile.carrier)} · ${Transport.label(profile.transport)}',
                     maxLines: 1,
                     overflow: TextOverflow.ellipsis,
                     style: const TextStyle(
-                      fontSize: 12,
-                      color: AppColors.textMuted,
+                      fontSize: 13,
+                      fontWeight: FontWeight.w700,
+                      color: AppColors.textSecondary,
+                    ),
+                  ),
+                  const SizedBox(height: 2),
+                  Text(
+                    meta,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: const TextStyle(
+                      fontFamily: kFontMono,
+                      fontSize: 10,
+                      color: AppColors.textDim,
                     ),
                   ),
                 ],
               ),
             ),
-            const SizedBox(width: 12),
-            // signal bars (decorative)
-            _SignalBars(active: active, color: accent),
+            const SizedBox(width: 10),
+            if (onEdit != null)
+              GestureDetector(
+                onTap: onEdit,
+                behavior: HitTestBehavior.opaque,
+                child: const Padding(
+                  padding: EdgeInsets.symmetric(horizontal: 4, vertical: 5),
+                  child: Text(
+                    'изменить',
+                    style: TextStyle(
+                      fontFamily: kFontMono,
+                      fontSize: 10,
+                      color: AppColors.primary,
+                    ),
+                  ),
+                ),
+              )
+            else
+              SignalBars(
+                level: level ?? (active ? 3 : 2),
+                active: active,
+              ),
           ],
         ),
       ),
     );
   }
 
-  IconData _iconFor(String transport) {
-    switch (transport) {
-      case Transport.sei:
-        return Icons.bolt_rounded;
-      case Transport.vp8:
-        return Icons.music_note_rounded;
-      case Transport.data:
-        return Icons.bubble_chart_rounded;
-      case Transport.video:
-        return Icons.videocam_rounded;
-      default:
-        return Icons.cable_rounded;
+  String _displayCarrier(String c) => c.isEmpty ? 'olcRTC' : c;
+
+  String _metaLine(Profile p) {
+    // Prefer a transport-channel + carrier descriptor.
+    final t = p.transport.isEmpty ? 'datachannel' : p.transport;
+    if (p.comment.isNotEmpty && p.comment != '${p.carrier} · ${p.transport}') {
+      return '$t · ${p.comment}';
     }
-  }
-}
-
-class _SignalBars extends StatelessWidget {
-  final bool active;
-  final Color color;
-  const _SignalBars({required this.active, required this.color});
-
-  @override
-  Widget build(BuildContext context) {
-    final bars = [4.0, 8.0, 12.0, 16.0];
-    return Row(
-      mainAxisSize: MainAxisSize.min,
-      crossAxisAlignment: CrossAxisAlignment.end,
-      children: [
-        for (var i = 0; i < bars.length; i++) ...[
-          Container(
-            width: 3,
-            height: bars[i],
-            decoration: BoxDecoration(
-              color: active ? color : AppColors.border,
-              borderRadius: BorderRadius.circular(1),
-            ),
-          ),
-          if (i < bars.length - 1) const SizedBox(width: 3),
-        ],
-      ],
-    );
+    return '$t · ${_displayCarrier(p.carrier)}';
   }
 }

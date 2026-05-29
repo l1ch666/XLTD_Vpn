@@ -66,13 +66,16 @@ class WindowsVpnBridge implements VpnBridge {
     }
     final runtimeDir = await _runtimeDir();
     final cfgPath = p.join(runtimeDir, 'client.yaml');
-    await File(cfgPath).writeAsString(_buildYaml(cfg));
+    // olcrtc resolves `data:` and `ffmpeg:` relative to its own exe dir, so the
+    // data/ folder and ffmpeg.exe live next to olcrtc.exe in tools/.
+    final toolsDir = p.dirname(exe);
+    await File(cfgPath).writeAsString(_buildYaml(cfg, toolsDir));
 
     _addLog('LOG', 'core: launching olcrtc.exe');
     _proc = await Process.start(
       exe,
       [cfgPath],
-      workingDirectory: p.dirname(exe),
+      workingDirectory: toolsDir,
       environment: _coreEnv(cfg),
       runInShell: false,
     );
@@ -136,22 +139,17 @@ class WindowsVpnBridge implements VpnBridge {
   // ── internals ──────────────────────────────────────────────────────────
 
   Map<String, String> _coreEnv(OlcConfig cfg) {
+    // Upstream olcrtc has no MTS-specific env knobs; keep pion quiet.
     final env = Map<String, String>.from(Platform.environment);
     env['PION_LOG_DISABLE'] = 'all';
-    if (cfg.carrier == 'mtslink') {
-      env['MTS_FORCE_VIDEO'] = cfg.strParam('mts-force-video', '1');
-      env['MTS_PEER_UPDATE'] = cfg.strParam('mts-peer-update', '1');
-      env['MTS_SILENT_AUDIO'] = cfg.strParam('mts-silent-audio', '1');
-      final vt = cfg.strParam('mts-video-test', '');
-      if (vt.isNotEmpty) env['MTS_VIDEO_TEST'] = vt;
-      final vc = cfg.strParam('mts-video-codec', '');
-      if (vc.isNotEmpty) env['MTS_VIDEO_CODEC'] = vc;
-    }
     return env;
   }
 
-  String _buildYaml(OlcConfig cfg) {
-    final isMts = cfg.isMtsLink;
+  /// Builds an upstream-olcrtc `cnc` client YAML (schema: docs/configuration.md).
+  /// Carriers are jitsi / telemost / wbstream; transports use the full
+  /// `*channel` names. `data:` and (for video) `ffmpeg:` resolve next to
+  /// olcrtc.exe inside [toolsDir].
+  String _buildYaml(OlcConfig cfg, String toolsDir) {
     final dns = cfg.strParam('dns', _defaultDns);
     String yq(Object v) =>
         '"${v.toString().replaceAll('\\', '\\\\').replaceAll('"', '\\"')}"';
@@ -161,8 +159,12 @@ class WindowsVpnBridge implements VpnBridge {
       ..writeln('auth:')
       ..writeln('  provider: ${yq(cfg.carrier)}')
       ..writeln('room:')
-      ..writeln('  id: ${yq(cfg.roomId)}')
-      ..writeln('  channel: ${yq(cfg.clientId)}')
+      ..writeln('  id: ${yq(cfg.roomId)}');
+    // room.channel is optional peer-routing metadata; only emit a real one.
+    if (cfg.clientId.isNotEmpty && cfg.clientId != 'default') {
+      out.writeln('  channel: ${yq(cfg.clientId)}');
+    }
+    out
       ..writeln('crypto:')
       ..writeln('  key: ${yq(cfg.keyHex)}')
       ..writeln('net:')
@@ -172,36 +174,57 @@ class WindowsVpnBridge implements VpnBridge {
       ..writeln('  host: ${yq(_socksHost)}')
       ..writeln('  port: $_socksPort')
       ..writeln('liveness:')
-      ..writeln('  interval: ${yq(cfg.strParam('liveness-interval', isMts ? '20s' : '10s'))}')
-      ..writeln('  timeout: ${yq(cfg.strParam('liveness-timeout', isMts ? '60s' : '5s'))}')
+      ..writeln('  interval: ${yq(cfg.strParam('liveness-interval', '10s'))}')
+      ..writeln('  timeout: ${yq(cfg.strParam('liveness-timeout', '5s'))}')
       ..writeln('  failures: ${cfg.intParam('liveness-failures', 3)}');
 
     switch (cfg.transport) {
       case Transport.vp8:
         out
           ..writeln('vp8:')
-          ..writeln('  fps: ${cfg.intParam('vp8-fps', cfg.intParam('fps', 25))}')
-          ..writeln('  batch_size: ${cfg.intParam('vp8-batch', cfg.intParam('batch', 1))}');
+          ..writeln('  fps: ${cfg.intParam('vp8-fps', cfg.intParam('fps', 30))}')
+          ..writeln('  batch_size: ${cfg.intParam('vp8-batch', cfg.intParam('batch', 8))}');
         break;
       case Transport.sei:
         out
           ..writeln('sei:')
-          ..writeln('  fps: ${cfg.intParam('fps', cfg.intParam('sei-fps', isMts ? 30 : 60))}')
-          ..writeln('  batch_size: ${cfg.intParam('batch', cfg.intParam('sei-batch', isMts ? 8 : 64))}')
-          ..writeln('  fragment_size: ${cfg.intParam('frag', cfg.intParam('sei-frag', isMts ? 700 : 900))}')
-          ..writeln('  ack_timeout_ms: ${cfg.intParam('ack-ms', cfg.intParam('sei-ack-ms', isMts ? 10000 : 2000))}');
+          ..writeln('  fps: ${cfg.intParam('fps', cfg.intParam('sei-fps', 60))}')
+          ..writeln('  batch_size: ${cfg.intParam('batch', cfg.intParam('sei-batch', 64))}')
+          ..writeln('  fragment_size: ${cfg.intParam('frag', cfg.intParam('sei-frag', 900))}')
+          ..writeln('  ack_timeout_ms: ${cfg.intParam('ack-ms', cfg.intParam('sei-ack-ms', 2000))}');
         break;
       case Transport.video:
+        final codec = cfg.strParam('video-codec', 'qrcode');
         out
           ..writeln('video:')
-          ..writeln('  codec: ${yq(cfg.strParam('video-codec', 'qrcode'))}')
-          ..writeln('  width: ${cfg.intParam('video-w', cfg.intParam('video-width', isMts ? 640 : 1080))}')
-          ..writeln('  height: ${cfg.intParam('video-h', cfg.intParam('video-height', isMts ? 360 : 1080))}')
-          ..writeln('  fps: ${cfg.intParam('video-fps', isMts ? 15 : 60)}')
-          ..writeln('  bitrate: ${yq(cfg.strParam('video-bitrate', isMts ? '1200k' : '5000k'))}');
+          ..writeln('  codec: ${yq(codec)}')
+          ..writeln('  width: ${cfg.intParam('video-w', cfg.intParam('video-width', 1080))}')
+          ..writeln('  height: ${cfg.intParam('video-h', cfg.intParam('video-height', 1080))}')
+          ..writeln('  fps: ${cfg.intParam('video-fps', 60)}')
+          ..writeln('  bitrate: ${yq(cfg.strParam('video-bitrate', '5000k'))}')
+          ..writeln('  hw: ${yq(cfg.strParam('video-hw', 'none'))}');
+        if (codec == 'qrcode') {
+          if (cfg.params.containsKey('video-qr-size')) {
+            out.writeln('  qr_size: ${cfg.intParam('video-qr-size', 0)}');
+          }
+          if (cfg.params.containsKey('video-qr-recovery')) {
+            out.writeln('  qr_recovery: ${yq(cfg.strParam('video-qr-recovery', 'medium'))}');
+          }
+        } else if (codec == 'tile') {
+          if (cfg.params.containsKey('video-tile-module')) {
+            out.writeln('  tile_module: ${cfg.intParam('video-tile-module', 0)}');
+          }
+          if (cfg.params.containsKey('video-tile-rs')) {
+            out.writeln('  tile_rs: ${cfg.intParam('video-tile-rs', 0)}');
+          }
+        }
+        // videochannel needs ffmpeg; bundled next to olcrtc.exe.
+        out.writeln('ffmpeg: ${yq(p.join(toolsDir, 'ffmpeg.exe'))}');
         break;
     }
-    out.writeln('debug: false');
+    out
+      ..writeln('data: data')
+      ..writeln('debug: false');
     return out.toString();
   }
 
@@ -277,8 +300,8 @@ class WindowsVpnBridge implements VpnBridge {
       p.join(exeDir, 'tools', name),
       p.join(exeDir, name),
       p.join(exeDir, 'data', 'flutter_assets', 'tools', name),
-      // Dev fallback: bundled tools in repo's electron-app/tools
-      p.normalize(p.join(exeDir, '..', '..', '..', '..', 'windows', 'electron-app', 'tools', name)),
+      // Dev fallback: canonical tools/ checked into windows/tools.
+      p.normalize(p.join(exeDir, '..', '..', '..', '..', '..', 'windows', 'tools', name)),
     ];
     for (final c in candidates) {
       if (await File(c).exists()) return c;

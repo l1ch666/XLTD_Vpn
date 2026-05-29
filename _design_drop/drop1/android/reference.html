@@ -1,0 +1,342 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=1480" />
+<title>XLTD VPN — Android · Reference</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500;600&family=IBM+Plex+Sans:wght@300;400;500;600;700&family=IBM+Plex+Serif:ital@0;1&display=swap" rel="stylesheet">
+<style>
+  :root{
+    --bg:#0E1014; --surface:#181B22; --surface-alt:#1A1D24; --surface-input:#10131A;
+    --line:#262A33; --line-strong:#2A3548; --border-dim:#3A3F49;
+    --text:#F0F1F4; --text-2:#C2C6CE; --text-3:#C8CCD4; --label:#7C8089; --dim:#646A75; --muted:#525763;
+    --primary:#2D7DFF; --primary-light:#7DA8FF; --primary-pale:#C5D9FF; --primary-deep:#1A5FE0;
+    --lime:#C9FF3D; --vp8:#E17055; --video:#5B8CFF;
+    --paper:#0B0C0F;
+  }
+  *{box-sizing:border-box}
+  html,body{margin:0;background:var(--paper);color:var(--text);font-family:'IBM Plex Sans',system-ui,sans-serif;-webkit-font-smoothing:antialiased}
+  body{background-image:radial-gradient(circle at 15% -8%,rgba(45,125,255,.10),transparent 42%),radial-gradient(circle at 90% 100%,rgba(201,255,61,.05),transparent 50%)}
+  .mono{font-family:'IBM Plex Mono',monospace}
+  .page{max-width:1440px;margin:0 auto;padding:48px 48px 120px}
+
+  .top{display:flex;justify-content:space-between;align-items:baseline;border-bottom:1px solid var(--line);padding-bottom:16px;margin-bottom:14px;font-family:'IBM Plex Mono',monospace;font-size:11px;letter-spacing:.16em;text-transform:uppercase;color:var(--dim)}
+  h1{font-family:'IBM Plex Serif',serif;font-weight:400;font-size:52px;letter-spacing:-.02em;margin:18px 0 6px}
+  h1 em{font-style:italic;color:var(--lime)}
+  .lede{color:var(--text-3);font-weight:300;font-size:16px;max-width:760px;line-height:1.5;margin-bottom:8px}
+  .folder-note{font-family:'IBM Plex Mono',monospace;font-size:12px;color:var(--dim);background:var(--surface);border:1px solid var(--line);border-radius:8px;padding:12px 16px;margin:20px 0 0;line-height:1.7}
+  .folder-note b{color:var(--primary-light)}
+
+  .sec{display:flex;align-items:baseline;gap:18px;border-top:1px solid var(--line);margin-top:64px;padding-top:18px;margin-bottom:28px}
+  .sec .n{font-family:'IBM Plex Mono',monospace;font-size:12px;color:var(--dim);letter-spacing:.16em}
+  .sec h2{font-family:'IBM Plex Serif',serif;font-weight:400;font-size:30px;letter-spacing:-.01em;margin:0}
+  .sec p{color:var(--text-3);font-size:14px;font-weight:300;margin:0;max-width:560px}
+
+  .phones{display:flex;gap:30px;flex-wrap:wrap}
+  .phone-col{width:330px}
+  .phone-cap{font-family:'IBM Plex Mono',monospace;font-size:11px;color:var(--dim);letter-spacing:.1em;margin:0 0 12px;display:flex;justify-content:space-between}
+  .phone-cap b{color:var(--text-2);text-transform:uppercase;letter-spacing:.14em;font-weight:600}
+
+  .phone{width:330px;background:var(--bg);border-radius:42px;padding:12px;box-shadow:0 40px 80px -40px rgba(0,0,0,.7),0 0 0 1px #16181C,inset 0 0 0 1px #23262E}
+  .screen{background:var(--bg);border-radius:32px;overflow:hidden;border:1px solid #16181C}
+  .statusbar{display:flex;justify-content:space-between;padding:12px 20px 2px;font-family:'IBM Plex Mono',monospace;font-size:11px;color:var(--text);font-weight:600}
+  .body{padding:6px 16px 0}
+  .topbar{display:flex;justify-content:space-between;font-family:'IBM Plex Mono',monospace;font-size:10.5px;color:var(--dim);padding:8px 0 10px}
+
+  /* hero */
+  .hero{display:flex;flex-direction:column;align-items:center;padding:8px 0 14px;gap:6px}
+  .badge{display:inline-flex;align-items:center;gap:7px;padding:6px 12px 6px 9px;border:1px solid var(--line);border-radius:20px;background:var(--surface-alt);font-size:11px;color:var(--label)}
+  .badge .dot{width:8px;height:8px;border-radius:50%}
+  .dot-lime{background:var(--lime);box-shadow:0 0 10px rgba(201,255,61,.6)}
+  .dot-blue{background:var(--primary);box-shadow:0 0 10px rgba(45,125,255,.6)}
+  .dot-off{background:var(--border-dim)}
+  .counter{display:flex;align-items:baseline;gap:6px;font-family:'IBM Plex Mono',monospace;margin-top:6px}
+  .counter .v{font-size:44px;color:#fff;font-weight:400;letter-spacing:-.02em;line-height:1}
+  .counter .u{font-size:16px;color:var(--muted)}
+  .sub{font-size:12px;color:var(--muted)}
+
+  .btn{display:block;text-align:center;padding:15px;border-radius:16px;font-weight:700;font-size:15px;color:#fff;margin:0 0 12px;background:linear-gradient(90deg,var(--primary),var(--lime))}
+  .btn.flat{background:var(--surface);border:1px solid var(--line);color:var(--text-3);font-weight:600}
+
+  .chips{display:flex;gap:6px;justify-content:center;margin-bottom:12px}
+  .chip{display:inline-flex;align-items:center;gap:5px;padding:6px 11px;border-radius:20px;border:1px solid var(--line);background:var(--surface);font-size:11px;color:var(--dim)}
+  .chip .d{width:6px;height:6px;border-radius:50%;background:var(--border-dim)}
+  .chip.on{background:#0F1A33;border-color:var(--primary);color:var(--primary-pale)}
+  .chip.on.sei .d{background:var(--lime);box-shadow:0 0 6px var(--lime)}
+  .chip.on.vp8 .d{background:var(--vp8)}
+  .chip.on.vid .d{background:var(--video)}
+  .chip.on.data .d{background:var(--primary)}
+
+  .metrics{display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:12px}
+  .metric{background:var(--surface);border:1px solid var(--line);border-radius:12px;padding:10px 12px}
+  .metric .l{font-family:'IBM Plex Mono',monospace;font-size:9.5px;letter-spacing:.1em;color:var(--muted);text-transform:uppercase}
+  .metric .v{font-family:'IBM Plex Mono',monospace;font-size:18px;color:#fff;margin-top:3px}
+  .metric .d{font-family:'IBM Plex Mono',monospace;font-size:10px;color:var(--primary);margin-top:2px}
+
+  .sectitle{font-family:'IBM Plex Mono',monospace;font-size:10px;font-weight:600;letter-spacing:.18em;color:var(--muted);text-transform:uppercase;margin:12px 0 8px;display:flex;justify-content:space-between}
+  .sectitle .add{color:var(--primary);font-size:10px}
+
+  .prow{display:flex;align-items:center;gap:9px;padding:9px 10px;background:var(--surface);border:1px solid var(--line);border-radius:14px;margin-bottom:8px}
+  .prow.sel{border-color:var(--line-strong)}
+  .prow .act{width:7px;height:7px;border-radius:50%;background:var(--line)}
+  .prow.sel .act{background:var(--lime);box-shadow:0 0 8px var(--lime)}
+  .prow .ic{width:32px;height:32px;border-radius:10px;background:var(--surface-alt);display:flex;align-items:center;justify-content:center;color:var(--primary-light)}
+  .prow .ic svg{width:18px;height:18px}
+  .prow .t{flex:1;min-width:0}
+  .prow .n{font-size:13px;font-weight:700;color:var(--text-2)}
+  .prow .m{font-family:'IBM Plex Mono',monospace;font-size:10px;color:var(--dim);margin-top:2px}
+  .prow .edit{font-family:'IBM Plex Mono',monospace;font-size:10px;color:var(--primary)}
+  .bars{display:flex;align-items:flex-end;gap:2px;height:20px}
+  .bars i{width:3px;border-radius:1px;background:var(--border-dim)}
+  .bars i.on{background:var(--primary)}
+  .bars i:nth-child(1){height:30%}.bars i:nth-child(2){height:53%}.bars i:nth-child(3){height:76%}.bars i:nth-child(4){height:99%}
+
+  .event{display:flex;gap:9px;padding:5px 0;font-size:11px;align-items:flex-start}
+  .event .t{font-family:'IBM Plex Mono',monospace;color:var(--border-dim);width:38px;flex-shrink:0}
+  .event .tag{font-family:'IBM Plex Mono',monospace;font-size:9px;padding:2px 5px;background:var(--surface-alt);border-radius:5px;flex-shrink:0}
+  .tag.ok{color:var(--lime)}.tag.dns{color:var(--primary)}.tag.warn{color:var(--vp8)}.tag.log{color:var(--dim)}
+  .event .msg{color:var(--text-3)}
+
+  .title-block .tt{font-size:23px;font-weight:700;color:var(--text);letter-spacing:-.01em}
+  .title-block .ts{font-size:12px;color:var(--dim);margin-top:4px;line-height:1.4}
+
+  .card{background:var(--surface);border:1px solid var(--line);border-radius:16px;padding:14px;margin-bottom:10px}
+  .field{margin-bottom:9px}
+  .field .fl{font-family:'IBM Plex Mono',monospace;font-size:10px;color:var(--dim);margin-bottom:4px}
+  .input{background:var(--surface-input);border:1px solid var(--line);border-radius:12px;padding:9px 12px;font-size:13px;color:var(--text)}
+  .input.area{min-height:78px;font-family:'IBM Plex Mono',monospace;font-size:10.5px;color:var(--text-3);white-space:pre-wrap;word-break:break-all;line-height:1.5}
+  .btn-sm{display:block;text-align:center;padding:11px;border-radius:16px;font-size:13px;font-weight:700;color:#fff;background:linear-gradient(90deg,var(--primary),var(--lime));margin-top:4px}
+  .btn-sm.sec{background:var(--surface);border:1px solid var(--line);color:var(--primary-pale);margin-top:8px}
+
+  .bottomnav{display:flex;background:#10131A;border-top:1px solid #171A20;padding:10px 6px}
+  .nav{flex:1;display:flex;flex-direction:column;align-items:center;gap:4px;font-family:'IBM Plex Sans';font-size:9px;font-weight:700;letter-spacing:.08em;text-transform:uppercase;color:var(--border-dim)}
+  .nav svg{width:22px;height:22px;stroke:currentColor;fill:none;stroke-width:1.5;stroke-linecap:round;stroke-linejoin:round}
+  .nav.on{color:var(--primary)}
+
+  /* asset board */
+  .board{display:grid;grid-template-columns:repeat(5,1fr);gap:14px}
+  .tile{background:var(--surface);border:1px solid var(--line);border-radius:12px;padding:18px 16px;display:flex;flex-direction:column;gap:12px}
+  .tile .stage{height:64px;display:flex;align-items:center;justify-content:center}
+  .tile .stage svg{width:34px;height:34px}
+  .tile .fn{font-family:'IBM Plex Mono',monospace;font-size:10.5px;color:var(--primary-light);word-break:break-all}
+  .tile .ds{font-size:11.5px;color:var(--dim);line-height:1.45}
+  .nav-ico svg{stroke:var(--text-2);fill:none;stroke-width:1.5;stroke-linecap:round;stroke-linejoin:round}
+  .tr-sei svg{stroke:var(--lime);fill:none;stroke-width:1.5;stroke-linecap:round;stroke-linejoin:round}
+  .tr-vp8 svg{stroke:var(--vp8);fill:none;stroke-width:1.5;stroke-linecap:round;stroke-linejoin:round}
+  .tr-vid svg{stroke:var(--video);fill:none;stroke-width:1.5;stroke-linecap:round;stroke-linejoin:round}
+  .tr-data svg{stroke:var(--primary);fill:none;stroke-width:1.5;stroke-linecap:round;stroke-linejoin:round}
+  .bunny-tile .stage{background:#000;border-radius:12px}
+  .bunny-tile .stage img{width:60%;height:60%;object-fit:contain}
+
+  /* palette board */
+  .pal{display:grid;grid-template-columns:repeat(6,1fr);gap:8px}
+  .sw{aspect-ratio:1/1.15;border-radius:8px;padding:9px;display:flex;flex-direction:column;justify-content:flex-end;font-family:'IBM Plex Mono',monospace;font-size:9px;border:1px solid rgba(255,255,255,.06)}
+  .sw .h{font-size:10px;font-weight:600}.sw .c{opacity:.7}
+  .sw.dk{color:#0A0B0F}.sw.lt{color:#EDEEF2}
+</style>
+</head>
+<body>
+<div class="page">
+
+  <div class="top">
+    <div>XLTD VPN · Android · Design Reference</div>
+    <div>com.s1dechain.olcrtcvpn · palette v3</div>
+  </div>
+  <h1>Android — каждое окно <em>и каждый элемент</em></h1>
+  <p class="lede">Полный визуальный разбор всех четырёх вкладок + редактора и всех графических атомов. Палитра — графит / электрик-синий / лайм. Всё построено программно в <span class="mono">MainActivity.java</span> без XML-разметки.</p>
+  <div class="folder-note">
+    📁 <b>android/</b><br/>
+    ├ <b>design-tokens.json</b> — цвета, радиусы, типографика (+ маппинг на исходные COLOR_* константы)<br/>
+    ├ <b>screens.md</b> — каждый экран по слоям<br/>
+    ├ <b>components.md</b> — каждый атом со спецификацией<br/>
+    ├ <b>reference.html</b> — этот файл<br/>
+    └ <b>assets/</b> — ic_launcher.png · ic_nav_*.svg ×4 · ic_transport_*.svg ×4 · signal_bars.svg
+  </div>
+
+  <!-- SCREENS -->
+  <div class="sec"><span class="n">01</span><h2>Экраны</h2><p>4 вкладки одного уровня + модальный редактор профиля.</p></div>
+  <div class="phones">
+
+    <!-- HOME -->
+    <div class="phone-col">
+      <div class="phone-cap"><b>01 · Главная</b><span class="mono">buildHomeTab</span></div>
+      <div class="phone"><div class="screen">
+        <div class="statusbar"><span>9:41</span><span class="mono">5G · 87%</span></div>
+        <div class="body">
+          <div class="topbar"><span>XLTD VPN</span><span>↓ 1.84 MB/s</span></div>
+          <div class="hero">
+            <div class="badge"><span class="dot dot-lime"></span>Подключено · MTS Link</div>
+            <div class="counter"><span class="v">12.4</span><span class="u">MB</span></div>
+            <div class="sub">передано за сессию</div>
+          </div>
+          <div class="btn">Отключить</div>
+          <div class="chips">
+            <span class="chip on sei"><span class="d"></span>SEI</span>
+            <span class="chip"><span class="d"></span>VP8</span>
+            <span class="chip"><span class="d"></span>Data</span>
+            <span class="chip"><span class="d"></span>Video</span>
+          </div>
+          <div class="metrics">
+            <div class="metric"><div class="l">↓ ВХОДЯЩИЙ</div><div class="v">1.84 MB/s</div><div class="d">SEI · 12 lanes</div></div>
+            <div class="metric"><div class="l">↑ ИСХОДЯЩИЙ</div><div class="v">412 KB/s</div><div class="d">один канал</div></div>
+            <div class="metric"><div class="l">ЗАДЕРЖКА</div><div class="v">74 ms</div><div class="d">SOCKS probe</div></div>
+            <div class="metric"><div class="l">АПТАЙМ</div><div class="v">0:42</div><div class="d">сессия</div></div>
+          </div>
+          <div class="sectitle"><span>СЕРВЕРЫ</span><span class="add">+ добавить</span></div>
+          <div class="prow sel"><span class="act"></span><span class="ic" data-ico="sei"></span><span class="t"><div class="n">MTS Link · SEI</div><div class="m">seichannel · lanes=12 · fps=30</div></span><span class="bars"><i class="on"></i><i class="on"></i><i class="on"></i><i></i></span></div>
+          <div class="prow"><span class="act"></span><span class="ic" data-ico="vp8"></span><span class="t"><div class="n">telemost · VP8</div><div class="m">vp8channel · batch=4 · fps=25</div></span><span class="bars"><i class="on"></i><i class="on"></i><i></i><i></i></span></div>
+          <div class="sectitle"><span>СОБЫТИЯ</span><span></span></div>
+          <div class="event"><span class="t">14:22</span><span class="tag ok">OK</span><span class="msg">VPN подключён. Трафик идёт через туннель.</span></div>
+          <div class="event"><span class="t">14:21</span><span class="tag dns">DNS</span><span class="msg">DNS выбран автоматически.</span></div>
+        </div>
+        <div class="bottomnav" data-nav="0"></div>
+      </div></div>
+    </div>
+
+    <!-- PROFILES -->
+    <div class="phone-col">
+      <div class="phone-cap"><b>02 · Профили</b><span class="mono">buildProfilesTab</span></div>
+      <div class="phone"><div class="screen">
+        <div class="statusbar"><span>9:41</span><span class="mono">5G · 87%</span></div>
+        <div class="body">
+          <div class="title-block" style="padding:8px 0 12px"><div class="tt">Профили</div><div class="ts">Сохранённые olcRTC/MTS Link конфигурации</div></div>
+          <div class="sectitle"><span>ПРОФИЛИ</span><span class="add">+ добавить</span></div>
+          <div class="prow sel"><span class="act"></span><span class="ic" data-ico="sei"></span><span class="t"><div class="n">MTS Link · SEI</div><div class="m">seichannel · lanes=12 · fps=30</div></span><span class="edit">изменить</span></div>
+          <div class="prow"><span class="act"></span><span class="ic" data-ico="vp8"></span><span class="t"><div class="n">telemost · VP8</div><div class="m">vp8channel · batch=4 · fps=25</div></span><span class="edit">изменить</span></div>
+          <div class="prow"><span class="act"></span><span class="ic" data-ico="data"></span><span class="t"><div class="n">jitsi · Data</div><div class="m">datachannel · jitsi</div></span><span class="edit">изменить</span></div>
+          <div class="card">
+            <div class="sectitle" style="margin-top:0"><span>РЕДАКТОР ПРОФИЛЯ</span><span class="add">удалить</span></div>
+            <div class="field"><div class="fl">Название</div><div class="input">MTS Link · SEI · прод</div></div>
+            <div class="field"><div class="fl">olcrtc URI</div><div class="input area">olcrtc://mtslink?seichannel&lt;fps=30&amp;batch=8&amp;frag=700&amp;mc-lanes=12&gt;@d7f3a912#hidden$прод</div></div>
+            <div class="btn-sm">Сохранить профиль</div>
+          </div>
+        </div>
+        <div class="bottomnav" data-nav="1"></div>
+      </div></div>
+    </div>
+
+    <!-- TRAFFIC -->
+    <div class="phone-col">
+      <div class="phone-cap"><b>03 · Трафик</b><span class="mono">buildTrafficTab</span></div>
+      <div class="phone"><div class="screen">
+        <div class="statusbar"><span>9:41</span><span class="mono">5G · 87%</span></div>
+        <div class="body">
+          <div class="title-block" style="padding:8px 0 12px"><div class="tt">Трафик ≈</div><div class="ts">Скорость считается через TrafficStats и включает фоновый трафик приложения — значения приблизительные.</div></div>
+          <div class="metrics">
+            <div class="metric"><div class="l">↓ ВХОДЯЩИЙ</div><div class="v">1.84 MB/s</div><div class="d">SEI · 12 lanes</div></div>
+            <div class="metric"><div class="l">↑ ИСХОДЯЩИЙ</div><div class="v">412 KB/s</div><div class="d">один канал</div></div>
+            <div class="metric"><div class="l">ЗАДЕРЖКА</div><div class="v">74 ms</div><div class="d">SOCKS probe</div></div>
+            <div class="metric"><div class="l">АПТАЙМ</div><div class="v">0:42</div><div class="d">сессия</div></div>
+          </div>
+          <div class="card">
+            <div class="sectitle" style="margin-top:0"><span>СЕССИЯ</span><span></span></div>
+            <div style="font-size:13px;color:var(--text-3);line-height:1.7">Принято: 9.7 MB<br/>Отправлено: 2.7 MB<br/>Транспорт: SEI · 12 lanes</div>
+          </div>
+          <div class="sectitle"><span>СОБЫТИЯ</span><span></span></div>
+          <div class="event"><span class="t">14:22</span><span class="tag ok">OK</span><span class="msg">VPN подключён.</span></div>
+          <div class="event"><span class="t">14:21</span><span class="tag dns">DNS</span><span class="msg">DNS выбран автоматически.</span></div>
+          <div class="event"><span class="t">14:20</span><span class="tag log">LOG</span><span class="msg">Серверная сторона отвечает на CONNECT.</span></div>
+          <div class="event"><span class="t">14:20</span><span class="tag warn">WARN</span><span class="msg">Туннель отвечает нестабильно.</span></div>
+        </div>
+        <div class="bottomnav" data-nav="2"></div>
+      </div></div>
+    </div>
+
+    <!-- SETTINGS -->
+    <div class="phone-col">
+      <div class="phone-cap"><b>04 · Настройки</b><span class="mono">buildSettingsForm</span></div>
+      <div class="phone"><div class="screen">
+        <div class="statusbar"><span>9:41</span><span class="mono">5G · 87%</span></div>
+        <div class="body">
+          <div class="title-block" style="padding:8px 0 12px"><div class="tt">Настройки</div><div class="ts">Параметры выбранного профиля без смены формата хранения</div></div>
+          <div class="card">
+            <div class="sectitle" style="margin-top:0"><span>MTS LINK · SEI · ПРОД</span><span></span></div>
+            <div style="font-size:11px;color:var(--dim);margin-bottom:10px" class="mono">mtslink / seichannel / lanes=12</div>
+            <div class="field"><div class="fl">MTU</div><div class="input">1040</div></div>
+            <div class="field"><div class="fl">SEI FPS</div><div class="input">30</div></div>
+            <div class="field"><div class="fl">SEI batch</div><div class="input">8</div></div>
+            <div class="field"><div class="fl">Multipath lanes</div><div class="input">12</div></div>
+            <div class="field"><div class="fl">Liveness timeout</div><div class="input">60s</div></div>
+            <div class="btn-sm">Сохранить параметры</div>
+            <div class="btn-sm sec">Открыть полный URI</div>
+          </div>
+        </div>
+        <div class="bottomnav" data-nav="3"></div>
+      </div></div>
+    </div>
+
+  </div>
+
+  <!-- ASSETS -->
+  <div class="sec"><span class="n">02</span><h2>Графические элементы</h2><p>Каждый файл лежит в <span class="mono">assets/</span>. SVG используют <span class="mono">currentColor</span> — Claude Code задаёт цвет по состоянию.</p></div>
+  <div class="board" id="board"></div>
+
+  <!-- PALETTE -->
+  <div class="sec"><span class="n">03</span><h2>Палитра</h2><p>Полный токен-сет в <span class="mono">design-tokens.json</span>.</p></div>
+  <div class="pal">
+    <div class="sw lt" style="background:#0E1014"><span class="h">bg</span><span class="c">#0E1014</span></div>
+    <div class="sw lt" style="background:#181B22"><span class="h">surface</span><span class="c">#181B22</span></div>
+    <div class="sw lt" style="background:#262A33"><span class="h">line</span><span class="c">#262A33</span></div>
+    <div class="sw lt" style="background:#525763"><span class="h">muted</span><span class="c">#525763</span></div>
+    <div class="sw lt" style="background:#7C8089"><span class="h">label</span><span class="c">#7C8089</span></div>
+    <div class="sw dk" style="background:#F0F1F4"><span class="h">text</span><span class="c">#F0F1F4</span></div>
+    <div class="sw lt" style="background:#2D7DFF"><span class="h">primary</span><span class="c">#2D7DFF</span></div>
+    <div class="sw dk" style="background:#7DA8FF"><span class="h">pr·light</span><span class="c">#7DA8FF</span></div>
+    <div class="sw dk" style="background:#C5D9FF"><span class="h">pr·pale</span><span class="c">#C5D9FF</span></div>
+    <div class="sw dk" style="background:#C9FF3D"><span class="h">lime/SEI</span><span class="c">#C9FF3D</span></div>
+    <div class="sw lt" style="background:#E17055"><span class="h">VP8</span><span class="c">#E17055</span></div>
+    <div class="sw lt" style="background:#5B8CFF"><span class="h">Video</span><span class="c">#5B8CFF</span></div>
+  </div>
+
+</div>
+
+<script>
+const navIco = {
+  home:'<path d="M4 11.5 12 5l8 6.5V19a1 1 0 0 1-1 1h-4v-6h-6v6H5a1 1 0 0 1-1-1z"/>',
+  profiles:'<rect x="4" y="5" width="16" height="4" rx="1.5"/><rect x="4" y="11" width="16" height="4" rx="1.5"/><rect x="4" y="17" width="10" height="2" rx="1"/>',
+  traffic:'<path d="M5 14l4-4 3 3 4-5 3 4"/><path d="M4 19h16"/>',
+  settings:'<circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.7 1.7 0 0 0 .3 1.8l.1.1a2 2 0 1 1-2.8 2.8l-.1-.1a1.7 1.7 0 0 0-1.8-.3 1.7 1.7 0 0 0-1 1.5V21a2 2 0 0 1-4 0v-.1a1.7 1.7 0 0 0-1.1-1.5 1.7 1.7 0 0 0-1.8.3l-.1.1a2 2 0 1 1-2.8-2.8l.1-.1a1.7 1.7 0 0 0 .3-1.8 1.7 1.7 0 0 0-1.5-1H3a2 2 0 0 1 0-4h.1A1.7 1.7 0 0 0 4.6 9a1.7 1.7 0 0 0-.3-1.8l-.1-.1a2 2 0 1 1 2.8-2.8l.1.1a1.7 1.7 0 0 0 1.8.3H9a1.7 1.7 0 0 0 1-1.5V3a2 2 0 0 1 4 0v.1a1.7 1.7 0 0 0 1 1.5 1.7 1.7 0 0 0 1.8-.3l.1-.1a2 2 0 1 1 2.8 2.8l-.1.1a1.7 1.7 0 0 0-.3 1.8V9c.3.6.9 1 1.5 1H21a2 2 0 0 1 0 4h-.1a1.7 1.7 0 0 0-1.5 1z"/>'
+};
+const trIco = {
+  sei:'<path d="M13 3 5 13h5l-1 8 8-10h-5z"/>',
+  vp8:'<path d="M9 18V6l9-2v12"/><circle cx="6.5" cy="18" r="2.5"/><circle cx="15.5" cy="16" r="2.5"/>',
+  video:'<rect x="3" y="6" width="18" height="12" rx="2"/><path d="M10 9.5v5l4.5-2.5z"/>',
+  data:'<path d="M3 12c2 0 2-5 4-5s2 10 4 10 2-10 4-10 2 5 4 5"/>'
+};
+const wrap = p => '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">'+p+'</svg>';
+const navLabels = ['ГЛАВНАЯ','ПРОФИЛИ','ТРАФИК','НАСТРОЙКИ'];
+const navKeys = ['home','profiles','traffic','settings'];
+
+// build bottom navs
+document.querySelectorAll('.bottomnav').forEach(nav=>{
+  const active = +nav.dataset.nav;
+  nav.innerHTML = navKeys.map((k,i)=>`<div class="nav ${i===active?'on':''}">${wrap(navIco[k])}<span>${navLabels[i]}</span></div>`).join('');
+});
+// profile-row transport icons
+document.querySelectorAll('.ic[data-ico]').forEach(el=>{ el.innerHTML = wrap(trIco[el.dataset.ico]); });
+
+// asset board
+const tiles = [
+  {cls:'bunny-tile', img:1, fn:'ic_launcher.png', ds:'Маскот-кролик 192×192, белая линия на чёрном. Лаунчер-иконка.'},
+  {cls:'nav-ico', svg:navIco.home, fn:'ic_nav_home.svg', ds:'Nav · Главная. 1.5px, currentColor.'},
+  {cls:'nav-ico', svg:navIco.profiles, fn:'ic_nav_profiles.svg', ds:'Nav · Профили.'},
+  {cls:'nav-ico', svg:navIco.traffic, fn:'ic_nav_traffic.svg', ds:'Nav · Трафик.'},
+  {cls:'nav-ico', svg:navIco.settings, fn:'ic_nav_settings.svg', ds:'Nav · Настройки.'},
+  {cls:'tr-sei', svg:trIco.sei, fn:'ic_transport_sei.svg', ds:'Транспорт SEI (↯). Акцент — лайм.'},
+  {cls:'tr-vp8', svg:trIco.vp8, fn:'ic_transport_vp8.svg', ds:'Транспорт VP8 (♪). Акцент — терракот.'},
+  {cls:'tr-vid', svg:trIco.video, fn:'ic_transport_video.svg', ds:'Транспорт Video (▣). Акцент — синий.'},
+  {cls:'tr-data', svg:trIco.data, fn:'ic_transport_data.svg', ds:'Транспорт Data (⌁). Акцент — primary.'},
+  {cls:'bars-tile', bars:1, fn:'signal_bars.svg', ds:'SignalBarsView — 4 деления. Уровень = f(latency).'}
+];
+document.getElementById('board').innerHTML = tiles.map(t=>{
+  let stage;
+  if(t.img) stage = '<img src="assets/ic_launcher.png" alt="bunny"/>';
+  else if(t.bars) stage = '<svg viewBox="0 0 26 24"><rect x="3" y="16.5" width="3" height="5.5" rx="1.5" fill="#2D7DFF"/><rect x="8" y="12.3" width="3" height="9.7" rx="1.5" fill="#2D7DFF"/><rect x="13" y="8" width="3" height="14" rx="1.5" fill="#2D7DFF"/><rect x="18" y="3.8" width="3" height="18.2" rx="1.5" fill="#262A33"/></svg>';
+  else stage = wrap(t.svg);
+  return `<div class="tile ${t.cls}"><div class="stage">${stage}</div><div class="fn">${t.fn}</div><div class="ds">${t.ds}</div></div>`;
+}).join('');
+</script>
+</body>
+</html>

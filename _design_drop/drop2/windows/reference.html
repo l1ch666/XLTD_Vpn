@@ -1,0 +1,323 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=1480" />
+<title>XLTD VPN — Windows · Reference</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500;600&family=IBM+Plex+Sans:wght@300;400;500;600;700&family=IBM+Plex+Serif:ital@0;1&display=swap" rel="stylesheet">
+<style>
+  :root{
+    --bg:#0E1014; --surface:#181B22; --surface-alt:#10131A; --surface-2:#1A1D24;
+    --line:#262A33; --line-strong:#2A3548; --border-dim:#3A3F49;
+    --ink:#F0F1F4; --text-3:#C8CCD4; --text-2:#C2C6CE; --meta:#7C8089; --dim:#646A75; --muted:#525763;
+    --primary:#2D7DFF; --primary-light:#7DA8FF; --primary-pale:#C5D9FF; --primary-deep:#1A5FE0;
+    --lime:#C9FF3D; --vp8:#E17055; --video:#5B8CFF;
+    --paper:#0B0C0F;
+  }
+  *{box-sizing:border-box}
+  html,body{margin:0;background:var(--paper);color:var(--ink);font-family:'IBM Plex Sans',system-ui,sans-serif;-webkit-font-smoothing:antialiased}
+  body{background-image:radial-gradient(circle at 15% -8%,rgba(45,125,255,.10),transparent 42%),radial-gradient(circle at 90% 100%,rgba(201,255,61,.05),transparent 50%)}
+  .mono{font-family:'IBM Plex Mono',monospace}
+  .page{max-width:1440px;margin:0 auto;padding:48px 48px 120px}
+
+  .top{display:flex;justify-content:space-between;align-items:baseline;border-bottom:1px solid var(--line);padding-bottom:16px;margin-bottom:14px;font-family:'IBM Plex Mono',monospace;font-size:11px;letter-spacing:.16em;text-transform:uppercase;color:var(--dim)}
+  h1{font-family:'IBM Plex Serif',serif;font-weight:400;font-size:52px;letter-spacing:-.02em;margin:18px 0 6px}
+  h1 em{font-style:italic;color:var(--lime)}
+  .lede{color:var(--text-3);font-weight:300;font-size:16px;max-width:780px;line-height:1.5;margin-bottom:8px}
+  .folder-note{font-family:'IBM Plex Mono',monospace;font-size:12px;color:var(--dim);background:var(--surface);border:1px solid var(--line);border-radius:8px;padding:12px 16px;margin:20px 0 0;line-height:1.7}
+  .folder-note b{color:var(--primary-light)}
+
+  .sec{display:flex;align-items:baseline;gap:18px;border-top:1px solid var(--line);margin-top:60px;padding-top:18px;margin-bottom:26px}
+  .sec .n{font-family:'IBM Plex Mono',monospace;font-size:12px;color:var(--dim);letter-spacing:.16em}
+  .sec h2{font-family:'IBM Plex Serif',serif;font-weight:400;font-size:30px;letter-spacing:-.01em;margin:0}
+  .sec p{color:var(--text-3);font-size:14px;font-weight:300;margin:0;max-width:560px}
+
+  /* window */
+  .win{background:#0A0B0F;border:1px solid #171A20;border-radius:14px;overflow:hidden;box-shadow:0 50px 100px -40px rgba(0,0,0,.7),0 0 0 1px rgba(255,255,255,.04)}
+  .titlebar{display:flex;align-items:center;justify-content:space-between;background:var(--bg);padding:9px 14px;border-bottom:1px solid #171A20;height:44px}
+  .titlebar .brand{display:flex;align-items:center;gap:10px}
+  .titlebar .bunny{width:26px;height:26px;background:#000;border-radius:6px;display:flex;align-items:center;justify-content:center;padding:3px}
+  .titlebar .bunny img{width:100%;height:100%;object-fit:contain}
+  .titlebar .name{font-size:13px;font-weight:500}
+  .titlebar .ver{font-family:'IBM Plex Mono',monospace;font-size:10.5px;color:var(--muted);letter-spacing:.08em;margin-left:4px}
+  .titlebar .center{font-family:'IBM Plex Mono',monospace;font-size:10.5px;color:var(--muted);letter-spacing:.16em;text-transform:uppercase}
+  .titlebar .ctrls{display:flex;gap:2px}
+  .titlebar .ctrls span{width:34px;height:24px;display:inline-flex;align-items:center;justify-content:center;color:var(--meta);font-size:11px}
+  .titlebar .ctrls span:last-child{color:var(--vp8)}
+
+  .winbody{display:grid;grid-template-columns:220px 1fr;min-height:640px;background:var(--bg)}
+  .rail{background:#0A0B0F;border-right:1px solid #16181C;padding:22px 14px;display:flex;flex-direction:column;gap:4px}
+  .rail .rh{font-family:'IBM Plex Mono',monospace;font-size:9.5px;color:var(--border-dim);letter-spacing:.2em;text-transform:uppercase;padding:0 10px 12px}
+  .ri{display:flex;align-items:center;gap:12px;padding:10px 12px;border-radius:10px;color:var(--meta);font-size:13px;font-weight:500}
+  .ri svg{width:18px;height:18px;stroke:currentColor;fill:none;stroke-width:1.5;stroke-linecap:round;stroke-linejoin:round;flex-shrink:0}
+  .ri.on{background:var(--surface);color:var(--primary-light);box-shadow:inset 2px 0 0 var(--primary)}
+  .ri .badge{margin-left:auto;font-family:'IBM Plex Mono',monospace;font-size:9.5px;color:var(--border-dim)}
+  .rail .sp{flex:1}
+  .rail .fb{padding:12px;border-top:1px solid #16181C;font-family:'IBM Plex Mono',monospace;font-size:10px;color:var(--border-dim);line-height:1.7}
+  .rail .fb b{color:var(--meta);font-weight:500}
+
+  .main{padding:22px 26px;display:flex;flex-direction:column;gap:16px}
+  .phead{display:flex;justify-content:space-between;align-items:flex-end}
+  .phead .sub{font-family:'IBM Plex Mono',monospace;font-size:11px;color:var(--muted);letter-spacing:.14em;text-transform:uppercase;margin-bottom:4px}
+  .phead h3{font-family:'IBM Plex Serif',serif;font-weight:400;font-size:28px;margin:0;letter-spacing:-.01em}
+  .phead h3 em{font-style:italic;color:var(--lime)}
+  .chips{display:flex;gap:7px;align-items:center}
+  .chips .lab{font-family:'IBM Plex Mono',monospace;font-size:10px;color:var(--muted);letter-spacing:.14em;text-transform:uppercase;margin-right:6px}
+  .chip{display:inline-flex;align-items:center;gap:6px;padding:6px 12px;border-radius:99px;border:1px solid var(--line);background:var(--surface);font-size:11.5px;color:var(--meta);font-family:'IBM Plex Mono',monospace}
+  .chip .d{width:6px;height:6px;border-radius:50%;background:var(--border-dim)}
+  .chip.on{background:#0F1A33;border-color:var(--primary);color:var(--primary-pale)}
+  .chip.on.sei .d{background:var(--lime);box-shadow:0 0 6px var(--lime)}
+
+  .statusrow{display:grid;grid-template-columns:1fr auto;gap:24px;align-items:center;background:var(--surface);border:1px solid var(--line);border-radius:14px;padding:20px 24px}
+  .statusrow .badge{display:inline-flex;align-items:center;gap:8px;padding:5px 11px 5px 9px;border:1px solid var(--line);border-radius:99px;background:var(--bg);font-size:10.5px;color:var(--lime);font-family:'IBM Plex Mono',monospace;letter-spacing:.08em;text-transform:uppercase;width:fit-content}
+  .statusrow .badge .dot{width:7px;height:7px;border-radius:50%;background:var(--lime);box-shadow:0 0 10px var(--lime)}
+  .statusrow .speed{display:flex;align-items:baseline;gap:8px;font-family:'IBM Plex Mono',monospace;margin:8px 0 4px}
+  .statusrow .speed .arr{color:var(--lime);font-size:22px}
+  .statusrow .speed .v{font-size:46px;color:#fff;letter-spacing:-.02em;line-height:.9;font-weight:400}
+  .statusrow .speed .u{font-size:15px;color:var(--meta)}
+  .statusrow .line{font-size:13.5px;color:var(--text-2)}
+  .statusrow .line b{color:var(--primary-light);font-weight:500}
+  .statusrow .right{display:flex;flex-direction:column;align-items:flex-end;gap:10px}
+  .statusrow .sess{font-family:'IBM Plex Mono',monospace;font-size:10.5px;color:var(--muted);letter-spacing:.06em;text-transform:uppercase}
+  .statusrow .sess b{color:var(--text-3);font-weight:500;text-transform:none}
+  .pillbtn{display:inline-flex;align-items:center;justify-content:center;gap:8px;padding:11px 26px;border-radius:99px;font-weight:600;font-size:13.5px;border:none}
+  .pillbtn svg{width:14px;height:14px;stroke:currentColor;fill:none;stroke-width:2;stroke-linecap:round;stroke-linejoin:round}
+  .pillbtn.danger{background:var(--surface);border:1px solid var(--line);color:var(--vp8)}
+  .pillbtn.primary{background:linear-gradient(90deg,var(--primary),var(--lime));color:#fff}
+
+  .metrics{display:grid;grid-template-columns:repeat(4,1fr);gap:10px}
+  .metric{background:var(--surface);border:1px solid var(--line);border-radius:14px;padding:13px 15px}
+  .metric .l{font-family:'IBM Plex Mono',monospace;font-size:10px;color:var(--muted);letter-spacing:.14em;text-transform:uppercase}
+  .metric .v{font-family:'IBM Plex Mono',monospace;font-size:23px;color:#fff;margin-top:5px}
+  .metric .d{font-family:'IBM Plex Mono',monospace;font-size:10px;color:var(--primary-light);margin-top:2px}
+  .spark{margin-top:9px;height:22px;display:flex;align-items:flex-end;gap:2px}
+  .spark i{flex:1;background:var(--line);border-radius:1px}
+  .spark i.h{background:linear-gradient(180deg,var(--primary),var(--primary-deep))}
+
+  .two{display:grid;grid-template-columns:1.05fr 1fr;gap:16px;align-items:flex-start}
+  .card{background:var(--surface);border:1px solid var(--line);border-radius:14px;padding:16px 18px}
+  .card .h{display:flex;justify-content:space-between;align-items:center;margin-bottom:12px}
+  .card .h .t{font-family:'IBM Plex Mono',monospace;font-size:10.5px;letter-spacing:.16em;color:var(--meta);text-transform:uppercase}
+  .card .h .a{font-size:11.5px;color:var(--primary-light)}
+  .prow{display:flex;align-items:center;gap:11px;padding:11px 13px;border-radius:12px;background:var(--bg);border:1px solid var(--line);margin-bottom:8px}
+  .prow.sel{border-color:var(--line-strong);background:#15171F}
+  .prow .act{width:7px;height:7px;border-radius:50%;background:var(--line);flex-shrink:0}
+  .prow.sel .act{background:var(--lime);box-shadow:0 0 8px var(--lime)}
+  .prow .ic{width:34px;height:34px;border-radius:10px;background:var(--surface);display:flex;align-items:center;justify-content:center;color:var(--primary-light);flex-shrink:0}
+  .prow .ic svg{width:18px;height:18px}
+  .prow .t{flex:1;min-width:0}
+  .prow .n{font-size:13px;font-weight:600;color:var(--ink)}
+  .prow .m{font-family:'IBM Plex Mono',monospace;font-size:10px;color:var(--meta);margin-top:2px}
+  .bars{height:18px;display:flex;align-items:flex-end;gap:2px;flex-shrink:0}
+  .bars i{width:3px;border-radius:1px;background:var(--border-dim)}
+  .bars i.on{background:var(--primary)}
+  .bars i:nth-child(1){height:30%}.bars i:nth-child(2){height:53%}.bars i:nth-child(3){height:76%}.bars i:nth-child(4){height:99%}
+
+  .event{display:flex;gap:11px;padding:7px 0;align-items:flex-start;font-size:12px;border-bottom:1px dashed #1C1F26}
+  .event:last-child{border-bottom:0}
+  .event .t{font-family:'IBM Plex Mono',monospace;color:var(--border-dim);width:54px;flex-shrink:0;font-size:10.5px}
+  .event .tag{font-family:'IBM Plex Mono',monospace;font-size:9.5px;padding:2px 6px;background:var(--bg);border-radius:5px;flex-shrink:0;border:1px solid var(--line)}
+  .tag.ok{color:var(--lime)}.tag.tun{color:var(--primary-light)}.tag.warn{color:var(--vp8)}.tag.log{color:var(--meta)}
+  .event .msg{color:var(--text-3)}
+
+  .route{display:grid;grid-template-columns:repeat(3,1fr);gap:10px}
+  .opt{padding:13px 15px;border-radius:12px;border:1px solid var(--line);background:var(--bg);display:flex;flex-direction:column;gap:4px}
+  .opt.sel{border-color:var(--primary);background:#15182B;box-shadow:0 0 0 1px var(--primary)}
+  .opt .n{font-size:12.5px;font-weight:600;color:var(--ink)}
+  .opt .m{font-family:'IBM Plex Mono',monospace;font-size:10px;color:var(--meta)}
+  .opt .tag{font-family:'IBM Plex Mono',monospace;font-size:9.5px;color:var(--muted);letter-spacing:.06em;text-transform:uppercase;margin-top:3px}
+  .opt.sel .tag{color:var(--primary-light)}
+
+  /* asset board */
+  .board{display:grid;grid-template-columns:repeat(5,1fr);gap:14px}
+  .tile{background:var(--surface);border:1px solid var(--line);border-radius:12px;padding:18px 16px;display:flex;flex-direction:column;gap:12px}
+  .tile .stage{height:60px;display:flex;align-items:center;justify-content:center}
+  .tile .stage svg{width:32px;height:32px}
+  .tile .fn{font-family:'IBM Plex Mono',monospace;font-size:10.5px;color:var(--primary-light);word-break:break-all}
+  .tile .ds{font-size:11.5px;color:var(--dim);line-height:1.45}
+  .ico-ui svg{stroke:var(--text-2);fill:none;stroke-width:1.5;stroke-linecap:round;stroke-linejoin:round}
+  .ico-pri svg{stroke:#fff;fill:none;stroke-width:2;stroke-linecap:round;stroke-linejoin:round}
+  .ico-pri .stage{background:linear-gradient(90deg,var(--primary),var(--lime));border-radius:10px}
+  .ico-dng svg{stroke:var(--vp8);fill:none;stroke-width:2;stroke-linecap:round;stroke-linejoin:round}
+  .ico-sei svg{stroke:var(--lime);fill:none;stroke-width:1.5;stroke-linecap:round;stroke-linejoin:round}
+  .bunny-tile .stage{background:#000;border-radius:12px}
+  .bunny-tile .stage img{width:58%;height:58%;object-fit:contain}
+
+  .pal{display:grid;grid-template-columns:repeat(6,1fr);gap:8px}
+  .sw{aspect-ratio:1/1.15;border-radius:8px;padding:9px;display:flex;flex-direction:column;justify-content:flex-end;font-family:'IBM Plex Mono',monospace;font-size:9px;border:1px solid rgba(255,255,255,.06)}
+  .sw .hh{font-size:10px;font-weight:600}.sw .cc{opacity:.7}
+  .sw.dk{color:#0A0B0F}.sw.lt{color:#EDEEF2}
+  .sw small{display:block;opacity:.5;font-size:8px;margin-top:2px}
+</style>
+</head>
+<body>
+<div class="page">
+
+  <div class="top">
+    <div>XLTD VPN · Windows · Design Reference</div>
+    <div>WinForms · MainForm.cs · palette v3</div>
+  </div>
+  <h1>Windows — окно, панели <em>и элементы</em></h1>
+  <p class="lede">Десктопный клиент, переведённый в тот же тёмный кокпит, что и Android. Графит / электрик-синий / лайм. Каждая панель карты ниже соответствует методу <span class="mono">MainForm.cs</span> (BuildEditor / BuildConnection / BuildLogs / DrawProfileItem); токены маппятся на исходные светлые цвета для миграции.</p>
+  <div class="folder-note">
+    📁 <b>windows/</b><br/>
+    ├ <b>design-tokens.json</b> — цвета/радиусы/типографика (+ source_value светлой версии + applies_to)<br/>
+    ├ <b>screens.md</b> — окно и каждая панель<br/>
+    ├ <b>components.md</b> — RoundedPanel · PillButton · owner-drawn row · ComboBox · log<br/>
+    ├ <b>reference.html</b> — этот файл<br/>
+    └ <b>assets/</b> — ic_launcher.png · ic_nav_*.svg ×5 · ic_transport_*.svg ×4 · ic_power/stop.svg · signal_bars.svg
+  </div>
+
+  <!-- WINDOW -->
+  <div class="sec"><span class="n">01</span><h2>Окно</h2><p>1080×740. Title-bar с маскотом · nav rail 220px · дашборд.</p></div>
+  <div class="win">
+    <div class="titlebar">
+      <div class="brand">
+        <div class="bunny"><img src="assets/ic_launcher.png" alt="bunny"/></div>
+        <span class="name">XLTD VPN</span>
+        <span class="ver">v0.6β · WIN-X64</span>
+      </div>
+      <div class="center">mtslink · seichannel · 12 lanes</div>
+      <div class="ctrls"><span>—</span><span>▢</span><span>×</span></div>
+    </div>
+    <div class="winbody">
+      <div class="rail">
+        <div class="rh">Workspace</div>
+        <div class="ri on" data-ico="home">Главная<span class="badge">01</span></div>
+        <div class="ri" data-ico="profiles">Профили<span class="badge">4</span></div>
+        <div class="ri" data-ico="traffic">Трафик</div>
+        <div class="ri" data-ico="settings">Настройки</div>
+        <div class="ri" data-ico="log">Runtime log</div>
+        <div class="sp"></div>
+        <div class="fb"><b>SOCKS</b> 127.0.0.1:10808<br/><b>Mode</b> Full tunnel (admin)<br/><b>Core</b> mtsRTC · universal</div>
+      </div>
+      <div class="main">
+        <div class="phead">
+          <div><div class="sub">Dashboard</div><h3>Канал <em>жив</em>.</h3></div>
+          <div class="chips">
+            <span class="lab">Transport</span>
+            <span class="chip on sei"><span class="d"></span>SEI</span>
+            <span class="chip"><span class="d"></span>VP8</span>
+            <span class="chip"><span class="d"></span>Data</span>
+            <span class="chip"><span class="d"></span>Video</span>
+          </div>
+        </div>
+
+        <div class="statusrow">
+          <div class="left">
+            <div class="badge"><span class="dot"></span>Tunnel active</div>
+            <div class="speed"><span class="arr">↓</span><span class="v">1.84</span><span class="u">MB/s</span></div>
+            <div class="line">mtslink · SEI · <b>12 lanes</b> · 74 ms · ↑ 412 KB/s</div>
+          </div>
+          <div class="right">
+            <button class="pillbtn danger" data-ico="stop">Stop</button>
+            <div class="sess">Сессия <b>12.4 MB</b> · <b>0:42</b></div>
+          </div>
+        </div>
+
+        <div class="metrics">
+          <div class="metric"><div class="l">↓ ВХОДЯЩИЙ</div><div class="v">1.84 MB/s</div><div class="d">SEI · 12 lanes</div><div class="spark"><i></i><i></i><i class="h" style="height:40%"></i><i class="h" style="height:60%"></i><i class="h" style="height:78%"></i><i class="h" style="height:95%"></i><i class="h" style="height:100%"></i><i class="h" style="height:82%"></i></div></div>
+          <div class="metric"><div class="l">↑ ИСХОДЯЩИЙ</div><div class="v">412 KB/s</div><div class="d">один канал</div><div class="spark"><i></i><i class="h" style="height:30%"></i><i class="h" style="height:45%"></i><i class="h" style="height:38%"></i><i class="h" style="height:52%"></i><i class="h" style="height:44%"></i><i class="h" style="height:58%"></i><i class="h" style="height:50%"></i></div></div>
+          <div class="metric"><div class="l">ЗАДЕРЖКА</div><div class="v">74 ms</div><div class="d">SOCKS probe</div><div class="spark"><i class="h" style="height:32%"></i><i class="h" style="height:38%"></i><i class="h" style="height:34%"></i><i class="h" style="height:42%"></i><i class="h" style="height:36%"></i><i class="h" style="height:33%"></i><i class="h" style="height:30%"></i><i class="h" style="height:28%"></i></div></div>
+          <div class="metric"><div class="l">АПТАЙМ</div><div class="v">0:42</div><div class="d">сессия</div><div class="spark"><i class="h" style="height:10%"></i><i class="h" style="height:22%"></i><i class="h" style="height:34%"></i><i class="h" style="height:46%"></i><i class="h" style="height:58%"></i><i class="h" style="height:72%"></i><i class="h" style="height:86%"></i><i class="h" style="height:100%"></i></div></div>
+        </div>
+
+        <div class="two">
+          <div class="card">
+            <div class="h"><span class="t">Профили · 4</span><span class="a">+ добавить</span></div>
+            <div class="prow sel"><span class="act"></span><span class="ic" data-ico="sei"></span><span class="t"><div class="n">mtslink · SEI · прод</div><div class="m">seichannel · lanes=12 · fps=30</div></span><span class="bars"><i class="on"></i><i class="on"></i><i class="on"></i><i></i></span></div>
+            <div class="prow"><span class="act"></span><span class="ic" data-ico="vp8"></span><span class="t"><div class="n">telemost · VP8</div><div class="m">vp8channel · batch=4 · fps=25</div></span><span class="bars"><i class="on"></i><i class="on"></i><i></i><i></i></span></div>
+            <div class="prow"><span class="act"></span><span class="ic" data-ico="data"></span><span class="t"><div class="n">jitsi · Data</div><div class="m">datachannel · jitsi</div></span><span class="bars"><i class="on"></i><i></i><i></i><i></i></span></div>
+          </div>
+          <div class="card">
+            <div class="h"><span class="t">Runtime log · live</span><span class="a">смотреть все</span></div>
+            <div class="event"><span class="t">14:22:33</span><span class="tag ok">OK</span><span class="msg">ICE connection state: connected</span></div>
+            <div class="event"><span class="t">14:22:18</span><span class="tag ok">OK</span><span class="msg">socks5 server listening on 127.0.0.1:10808</span></div>
+            <div class="event"><span class="t">14:22:12</span><span class="tag tun">TUN</span><span class="msg">wintun adapter created · mtu=1500</span></div>
+            <div class="event"><span class="t">14:22:11</span><span class="tag tun">DNS</span><span class="msg">DNS upstream selected automatically</span></div>
+            <div class="event"><span class="t">14:22:08</span><span class="tag log">LOG</span><span class="msg">Carrier connected. Waiting for handshake</span></div>
+            <div class="event"><span class="t">14:21:55</span><span class="tag warn">HINT</span><span class="msg">Full tunnel requires Administrator</span></div>
+          </div>
+        </div>
+
+        <div class="card">
+          <div class="h"><span class="t">Режим маршрутизации</span><span class="a">elevated session ✓</span></div>
+          <div class="route">
+            <div class="opt"><div class="n">Local SOCKS only</div><div class="m">127.0.0.1:10808</div><div class="tag">безопасно</div></div>
+            <div class="opt"><div class="n">Windows user proxy</div><div class="m">системные настройки</div><div class="tag">beta</div></div>
+            <div class="opt sel"><div class="n">Full tunnel · Wintun</div><div class="m">tun2socks · mtu 1500</div><div class="tag">admin · active</div></div>
+          </div>
+        </div>
+
+      </div>
+    </div>
+  </div>
+
+  <!-- ASSETS -->
+  <div class="sec"><span class="n">02</span><h2>Графические элементы</h2><p>В <span class="mono">assets/</span>. Nav-иконки общие с Android; добавлены log / power / stop.</p></div>
+  <div class="board" id="board"></div>
+
+  <!-- PALETTE -->
+  <div class="sec"><span class="n">03</span><h2>Палитра</h2><p>Тёмная схема + исходные светлые значения (<span class="mono">source_value</span> в tokens).</p></div>
+  <div class="pal">
+    <div class="sw lt" style="background:#0E1014"><span class="hh">bg</span><span class="cc">#0E1014</span><small>был #F5F6F8</small></div>
+    <div class="sw lt" style="background:#181B22"><span class="hh">surface</span><span class="cc">#181B22</span><small>был #FFFFFF</small></div>
+    <div class="sw lt" style="background:#262A33"><span class="hh">line</span><span class="cc">#262A33</span><small>был #E8EAEE</small></div>
+    <div class="sw lt" style="background:#7C8089"><span class="hh">meta</span><span class="cc">#7C8089</span><small>был #5F6570</small></div>
+    <div class="sw dk" style="background:#F0F1F4"><span class="hh">ink</span><span class="cc">#F0F1F4</span><small>был #111111</small></div>
+    <div class="sw lt" style="background:#2D7DFF"><span class="hh">primary</span><span class="cc">#2D7DFF</span><small>был #111111</small></div>
+    <div class="sw dk" style="background:#7DA8FF"><span class="hh">pr·light</span><span class="cc">#7DA8FF</span></div>
+    <div class="sw dk" style="background:#C5D9FF"><span class="hh">pr·pale</span><span class="cc">#C5D9FF</span></div>
+    <div class="sw dk" style="background:#C9FF3D"><span class="hh">lime/SEI</span><span class="cc">#C9FF3D</span></div>
+    <div class="sw lt" style="background:#E17055"><span class="hh">vp8/stop</span><span class="cc">#E17055</span></div>
+    <div class="sw lt" style="background:#5B8CFF"><span class="hh">video</span><span class="cc">#5B8CFF</span></div>
+    <div class="sw lt" style="background:#1A5FE0"><span class="hh">pr·deep</span><span class="cc">#1A5FE0</span></div>
+  </div>
+
+</div>
+
+<script>
+const ico = {
+  home:'<path d="M4 11.5 12 5l8 6.5V19a1 1 0 0 1-1 1h-4v-6h-6v6H5a1 1 0 0 1-1-1z"/>',
+  profiles:'<rect x="4" y="5" width="16" height="4" rx="1.5"/><rect x="4" y="11" width="16" height="4" rx="1.5"/><rect x="4" y="17" width="10" height="2" rx="1"/>',
+  traffic:'<path d="M5 14l4-4 3 3 4-5 3 4"/><path d="M4 19h16"/>',
+  settings:'<circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.7 1.7 0 0 0 .3 1.8l.1.1a2 2 0 1 1-2.8 2.8l-.1-.1a1.7 1.7 0 0 0-1.8-.3 1.7 1.7 0 0 0-1 1.5V21a2 2 0 0 1-4 0v-.1a1.7 1.7 0 0 0-1.1-1.5 1.7 1.7 0 0 0-1.8.3l-.1.1a2 2 0 1 1-2.8-2.8l.1-.1a1.7 1.7 0 0 0 .3-1.8 1.7 1.7 0 0 0-1.5-1H3a2 2 0 0 1 0-4h.1A1.7 1.7 0 0 0 4.6 9a1.7 1.7 0 0 0-.3-1.8l-.1-.1a2 2 0 1 1 2.8-2.8l.1.1a1.7 1.7 0 0 0 1.8.3H9a1.7 1.7 0 0 0 1-1.5V3a2 2 0 0 1 4 0v.1a1.7 1.7 0 0 0 1 1.5 1.7 1.7 0 0 0 1.8-.3l.1-.1a2 2 0 1 1 2.8 2.8l-.1.1a1.7 1.7 0 0 0-.3 1.8V9c.3.6.9 1 1.5 1H21a2 2 0 0 1 0 4h-.1a1.7 1.7 0 0 0-1.5 1z"/>',
+  log:'<path d="M4 6h16M4 12h16M4 18h10"/>',
+  sei:'<path d="M13 3 5 13h5l-1 8 8-10h-5z"/>',
+  vp8:'<path d="M9 18V6l9-2v12"/><circle cx="6.5" cy="18" r="2.5"/><circle cx="15.5" cy="16" r="2.5"/>',
+  video:'<rect x="3" y="6" width="18" height="12" rx="2"/><path d="M10 9.5v5l4.5-2.5z"/>',
+  data:'<path d="M3 12c2 0 2-5 4-5s2 10 4 10 2-10 4-10 2 5 4 5"/>',
+  stop:'<rect x="6" y="6" width="12" height="12" rx="1.5"/>',
+  power:'<path d="M12 4v8"/><path d="M7.5 7a7 7 0 1 0 9 0"/>'
+};
+const w15 = p => '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">'+p+'</svg>';
+const w2  = p => '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">'+p+'</svg>';
+
+document.querySelectorAll('.ri[data-ico]').forEach(el=>{ el.insertAdjacentHTML('afterbegin', w15(ico[el.dataset.ico])); });
+document.querySelectorAll('.ic[data-ico]').forEach(el=>{ el.innerHTML = w15(ico[el.dataset.ico]); });
+document.querySelectorAll('.pillbtn[data-ico]').forEach(el=>{ el.insertAdjacentHTML('afterbegin', w2(ico[el.dataset.ico])); });
+
+const tiles = [
+  {cls:'bunny-tile', img:1, fn:'ic_launcher.png', ds:'Маскот в title-bar. 192×192, белая линия на чёрном.'},
+  {cls:'ico-ui', svg:w15(ico.home), fn:'ic_nav_home.svg', ds:'Nav rail · Главная (общая с Android).'},
+  {cls:'ico-ui', svg:w15(ico.profiles), fn:'ic_nav_profiles.svg', ds:'Nav rail · Профили.'},
+  {cls:'ico-ui', svg:w15(ico.traffic), fn:'ic_nav_traffic.svg', ds:'Nav rail · Трафик.'},
+  {cls:'ico-ui', svg:w15(ico.settings), fn:'ic_nav_settings.svg', ds:'Nav rail · Настройки.'},
+  {cls:'ico-ui', svg:w15(ico.log), fn:'ic_nav_log.svg', ds:'Nav rail · Runtime log.'},
+  {cls:'ico-pri', svg:w2(ico.power), fn:'ic_power.svg', ds:'Connect — белый на blue→lime градиенте.'},
+  {cls:'ico-dng', svg:w2(ico.stop), fn:'ic_stop.svg', ds:'Stop — danger, терракот #E17055.'},
+  {cls:'ico-sei', svg:w15(ico.sei), fn:'ic_transport_*.svg', ds:'Транспорт-глифы SEI/VP8/Video/Data (общие с Android).'},
+  {cls:'bars-tile', bars:1, fn:'signal_bars.svg', ds:'Качество профиля — те же 4 деления.'}
+];
+document.getElementById('board').innerHTML = tiles.map(t=>{
+  let stage;
+  if(t.img) stage = '<img src="assets/ic_launcher.png" alt="bunny"/>';
+  else if(t.bars) stage = '<svg viewBox="0 0 26 24"><rect x="3" y="16.5" width="3" height="5.5" rx="1.5" fill="#2D7DFF"/><rect x="8" y="12.3" width="3" height="9.7" rx="1.5" fill="#2D7DFF"/><rect x="13" y="8" width="3" height="14" rx="1.5" fill="#2D7DFF"/><rect x="18" y="3.8" width="3" height="18.2" rx="1.5" fill="#262A33"/></svg>';
+  else stage = t.svg;
+  return `<div class="tile ${t.cls}"><div class="stage">${stage}</div><div class="fn">${t.fn}</div><div class="ds">${t.ds}</div></div>`;
+}).join('');
+</script>
+</body>
+</html>

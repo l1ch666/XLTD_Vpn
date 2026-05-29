@@ -1,7 +1,7 @@
 name: xltd_vpn
-description: "XLTD VPN - olcRTC and MTS Link client"
+description: "XLTD VPN - olcRTC tunnelling client"
 publish_to: 'none'
-version: 2.0.0+25
+version: 2.2.0+27
 
 environment:
   sdk: ^3.5.4
@@ -25,6 +25,9 @@ dependencies:
   # Windows frameless window controls
   window_manager: ^0.4.2
 
+  # Vector icons from the v3 design drop
+  flutter_svg: ^2.0.10+1
+
 dev_dependencies:
   flutter_test:
     sdk: flutter
@@ -32,3 +35,35 @@ dev_dependencies:
 
 flutter:
   uses-material-design: true
+
+  assets:
+    - assets/icons/
+
+  fonts:
+    - family: IBM Plex Sans
+      fonts:
+        - asset: fonts/IBMPlexSans-Light.ttf
+          weight: 300
+        - asset: fonts/IBMPlexSans-Regular.ttf
+          weight: 400
+        - asset: fonts/IBMPlexSans-Medium.ttf
+          weight: 500
+        - asset: fonts/IBMPlexSans-SemiBold.ttf
+          weight: 600
+        - asset: fonts/IBMPlexSans-Bold.ttf
+          weight: 700
+    - family: IBM Plex Mono
+      fonts:
+        - asset: fonts/IBMPlexMono-Regular.ttf
+          weight: 400
+        - asset: fonts/IBMPlexMono-Medium.ttf
+          weight: 500
+        - asset: fonts/IBMPlexMono-SemiBold.ttf
+          weight: 600
+    - family: IBM Plex Serif
+      fonts:
+        - asset: fonts/IBMPlexSerif-Regular.ttf
+          weight: 400
+        - asset: fonts/IBMPlexSerif-Italic.ttf
+          weight: 400
+          style: italic

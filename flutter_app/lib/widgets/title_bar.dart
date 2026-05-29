@@ -1,16 +1,17 @@
-﻿import 'dart:io';
+import 'dart:io';
 
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:window_manager/window_manager.dart';
 
 import '../models/connection_status.dart';
-import '../models/transport.dart';
 import '../state/app_state.dart';
 import '../theme/colors.dart';
+import '../theme/theme.dart';
 
 /// Frameless-window title bar shown only on Windows desktop.
-/// Center label updates to the active carrier when connected.
+/// Left: bunny mascot tile + name + version chip. Center: live carrier ·
+/// transport context (mono). Right: window controls (close hovers vp8).
 class TitleBar extends StatelessWidget {
   const TitleBar({super.key});
 
@@ -18,60 +19,80 @@ class TitleBar extends StatelessWidget {
   Widget build(BuildContext context) {
     if (!Platform.isWindows) return const SizedBox.shrink();
     final app = context.watch<AppState>();
-    final connected = app.telemetry.state == VpnState.connected;
+    final t = app.telemetry;
+    final connected = t.state == VpnState.connected;
     final center = connected
-        ? '${app.telemetry.carrier?.toUpperCase() ?? ''} · '
-            '${Transport.label(app.telemetry.transport ?? '')}'
-        : 'XLTD VPN';
+        ? '${(t.carrier ?? 'olcrtc').toLowerCase()} · '
+            '${(t.transport ?? '').isEmpty ? 'datachannel' : t.transport}'
+        : 'локальный SOCKS · 127.0.0.1:10808';
 
     return GestureDetector(
       onPanStart: (_) => windowManager.startDragging(),
       child: Container(
-        height: 36,
-        color: AppColors.bg,
+        height: 44,
+        decoration: const BoxDecoration(
+          color: AppColors.bg,
+          border: Border(
+            bottom: BorderSide(color: AppColors.line),
+          ),
+        ),
         child: Row(
           children: [
-            const SizedBox(width: 12),
-            // brand
-            Row(
-              children: [
-                Container(
-                  width: 6,
-                  height: 6,
-                  decoration: BoxDecoration(
-                    color: connected ? AppColors.ok : AppColors.primary,
-                    shape: BoxShape.circle,
-                  ),
+            const SizedBox(width: 10),
+            // bunny mascot on a black tile
+            Container(
+              width: 26,
+              height: 26,
+              decoration: BoxDecoration(
+                color: Colors.black,
+                borderRadius: BorderRadius.circular(6),
+              ),
+              clipBehavior: Clip.antiAlias,
+              alignment: Alignment.center,
+              child: Image.asset(
+                'assets/icons/ic_launcher.png',
+                width: 22,
+                height: 22,
+                fit: BoxFit.contain,
+              ),
+            ),
+            const SizedBox(width: 9),
+            const Text(
+              'XLTD VPN',
+              style: TextStyle(
+                fontFamily: kFontSans,
+                color: AppColors.text,
+                fontSize: 12.5,
+                fontWeight: FontWeight.w700,
+                letterSpacing: 0.4,
+              ),
+            ),
+            const SizedBox(width: 8),
+            Container(
+              padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 2),
+              decoration: BoxDecoration(
+                color: AppColors.surface,
+                border: Border.all(color: AppColors.line),
+                borderRadius: BorderRadius.circular(6),
+              ),
+              child: const Text(
+                'v2.2.0 · WIN-X64',
+                style: TextStyle(
+                  fontFamily: kFontMono,
+                  color: AppColors.textDim,
+                  fontSize: 9.5,
                 ),
-                const SizedBox(width: 8),
-                const Text(
-                  'XLTD VPN',
-                  style: TextStyle(
-                    color: AppColors.text,
-                    fontSize: 12,
-                    fontWeight: FontWeight.w700,
-                    letterSpacing: 0.6,
-                  ),
-                ),
-                const SizedBox(width: 8),
-                Text(
-                  'v2.0.0',
-                  style: TextStyle(
-                    color: AppColors.textDim,
-                    fontSize: 10,
-                  ),
-                ),
-              ],
+              ),
             ),
             Expanded(
               child: Center(
                 child: Text(
                   center,
                   style: const TextStyle(
-                    color: AppColors.text,
+                    fontFamily: kFontMono,
+                    color: AppColors.textMuted,
                     fontSize: 11,
-                    fontWeight: FontWeight.w600,
-                    letterSpacing: 0.6,
+                    letterSpacing: 0.4,
                   ),
                 ),
               ),
@@ -92,7 +113,8 @@ class TitleBar extends StatelessWidget {
             ),
             _WindowButton(
               icon: Icons.close,
-              hoverColor: AppColors.err.withOpacity(0.25),
+              hoverColor: AppColors.vp8.withOpacity(0.85),
+              hoverIconColor: Colors.white,
               onPressed: () => windowManager.close(),
             ),
           ],
@@ -106,11 +128,13 @@ class _WindowButton extends StatefulWidget {
   final IconData icon;
   final VoidCallback onPressed;
   final Color? hoverColor;
+  final Color? hoverIconColor;
 
   const _WindowButton({
     required this.icon,
     required this.onPressed,
     this.hoverColor,
+    this.hoverIconColor,
   });
 
   @override
@@ -128,13 +152,19 @@ class _WindowButtonState extends State<_WindowButton> {
       child: GestureDetector(
         onTap: widget.onPressed,
         child: Container(
-          width: 44,
-          height: 36,
+          width: 46,
+          height: 44,
           color: _hover
               ? (widget.hoverColor ?? AppColors.surface)
               : Colors.transparent,
           alignment: Alignment.center,
-          child: Icon(widget.icon, size: 14, color: AppColors.textMuted),
+          child: Icon(
+            widget.icon,
+            size: 14,
+            color: _hover
+                ? (widget.hoverIconColor ?? AppColors.textTertiary)
+                : AppColors.textMuted,
+          ),
         ),
       ),
     );

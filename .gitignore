@@ -27,3 +27,12 @@ flutter_app/android/app/src/main/jniLibs/
 flutter_app/windows/build/
 flutter_app/windows/flutter/ephemeral/
 flutter_app/android/local.properties
+
+# Bundled native helper binaries (olcrtc.exe / tun2socks.exe / ffmpeg.exe /
+# wintun.dll). Large vendored artefacts — built/copied locally, not committed.
+flutter_app/windows/tools/
+
+# Local build logs
+*.log
+_apk_build.log
+_win_build.log

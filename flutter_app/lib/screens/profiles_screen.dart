@@ -45,6 +45,7 @@ class ProfilesScreen extends StatelessWidget {
                   profile: p,
                   active: p.id == app.activeProfile?.id,
                   onTap: () => app.selectProfile(p),
+                  onEdit: () => _openEditor(context, app, p),
                   onLongPress: () => _confirmDelete(context, app, p),
                 );
               },

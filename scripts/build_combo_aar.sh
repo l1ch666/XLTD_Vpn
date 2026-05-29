@@ -11,8 +11,8 @@ ANDROID_FFMPEG_VERSION="${ANDROID_FFMPEG_VERSION:-8.1}"
 ANDROID_FFMPEG_ABIS="${ANDROID_FFMPEG_ABIS:-arm64-v8a}"
 ANDROID_FFMPEG_ASSETS_DIR="${PROJECT_ROOT}/app/src/main/assets/ffmpeg"
 ANDROID_FFMPEG_CACHE_DIR="${EXT}/ffmpeg-android"
-OLC_REPO="${OLC_REPO:-https://github.com/l1ch666/mtsRTC.git}"
-OLC_REF="${OLC_REF:-mtslink-universal-carrier}"
+OLC_REPO="${OLC_REPO:-https://github.com/openlibrecommunity/olcrtc.git}"
+OLC_REF="${OLC_REF:-master}"
 OLC_PATCHES="${OLC_PATCHES:-}"
 
 mkdir -p "${EXT}" "${PROJECT_ROOT}/app/libs"
@@ -169,7 +169,7 @@ mkdir -p "${COMBO_DIR}"
 cat > "${COMBO_DIR}/go.mod" <<'EOGO'
 module github.com/openlibrecommunity/olcrtc/mobilecombo
 
-go 1.25.0
+go 1.26
 
 require (
     github.com/openlibrecommunity/olcrtc v0.0.0
@@ -222,7 +222,6 @@ import (
 	"github.com/openlibrecommunity/olcrtc/internal/control"
 	"github.com/openlibrecommunity/olcrtc/internal/logger"
 	"github.com/openlibrecommunity/olcrtc/internal/protect"
-	"github.com/openlibrecommunity/olcrtc/internal/runtime"
 	"github.com/openlibrecommunity/olcrtc/internal/transport"
 	"github.com/openlibrecommunity/olcrtc/internal/transport/seichannel"
 	"github.com/openlibrecommunity/olcrtc/internal/transport/videochannel"
@@ -317,8 +316,6 @@ type mobileConfig struct {
 	trafficMaxPayload int
 	trafficMinDelayMS int
 	trafficMaxDelayMS int
-
-	multipath runtime.MultipathConfig
 }
 
 var (
@@ -824,17 +821,17 @@ func SetTrafficOptions(maxPayload, minDelayMS, maxDelayMS int) {
 	defaults.trafficMaxDelayMS = clampNonNegative(maxDelayMS, 60000)
 }
 
+// SetMultipathOptions is retained for ABI compatibility with the Android
+// reflection bridge (OlcMobileBridge.setMultipathOptionsIfAvailable). The
+// upstream olcRTC core has no multipath/lane support — sessions are always
+// single-lane — so this is intentionally a no-op. The bridge only calls it for
+// the legacy "mtslink" carrier, which upstream does not ship.
 func SetMultipathOptions(lanes, controlLanes, connectParallelism, minReady, maxStreamsPerLane int) {
-	runtimeMu.Lock()
-	defer runtimeMu.Unlock()
-	ensureDefaultConfigLocked()
-	defaults.multipath = runtime.MultipathConfig{
-		Lanes:              lanes,
-		ControlLanes:       controlLanes,
-		ConnectParallelism: connectParallelism,
-		MinReady:           minReady,
-		MaxStreamsPerLane:  maxStreamsPerLane,
-	}.WithDefaults()
+	_ = lanes
+	_ = controlLanes
+	_ = connectParallelism
+	_ = minReady
+	_ = maxStreamsPerLane
 }
 
 func SetDebug(enabled bool) {
@@ -890,7 +887,6 @@ func mobileClientConfig(
 		Token:            cfg.token,
 		Liveness:         mobileLivenessConfig(cfg),
 		Traffic:          mobileTrafficConfig(cfg),
-		Multipath:        cfg.multipath,
 	}
 }
 

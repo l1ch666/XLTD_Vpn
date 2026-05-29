@@ -106,3 +106,15 @@ install(DIRECTORY "${PROJECT_BUILD_DIR}/${FLUTTER_ASSET_DIR_NAME}"
 install(FILES "${AOT_LIBRARY}" DESTINATION "${INSTALL_BUNDLE_DATA_DIR}"
   CONFIGURATIONS Profile;Release
   COMPONENT Runtime)
+
+# === Native tools (olcrtc core + routing/media helpers) ===
+# Bundle the upstream olcrtc.exe, tun2socks.exe, wintun.dll, ffmpeg.exe and the
+# name/surname data into a tools/ folder next to the runner executable so the
+# Dart bridges (windows_vpn_bridge / windows_route_service) resolve them via
+# <exeDir>/tools/<name> at runtime.
+set(XLTD_TOOLS_DIR "${CMAKE_CURRENT_SOURCE_DIR}/tools")
+if(EXISTS "${XLTD_TOOLS_DIR}")
+  install(DIRECTORY "${XLTD_TOOLS_DIR}/"
+    DESTINATION "${CMAKE_INSTALL_PREFIX}/tools"
+    COMPONENT Runtime)
+endif()

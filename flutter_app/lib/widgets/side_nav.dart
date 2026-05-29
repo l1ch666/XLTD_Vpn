@@ -1,14 +1,15 @@
-﻿import 'package:flutter/material.dart';
+import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
 import '../models/connection_status.dart';
-import '../models/transport.dart';
 import '../services/vpn_bridge.dart';
 import '../state/app_state.dart';
 import '../theme/colors.dart';
+import '../theme/theme.dart';
+import 'app_icon.dart';
 
-/// Desktop side rail with nav items and a footer that mirrors the live
-/// SOCKS / route mode / core state. Matches the rail in xltd design.html.
+/// Desktop side rail (220px) with SVG nav items and a mono footer mirroring the
+/// live SOCKS endpoint / route mode / core state. Matches `_design_drop/drop2`.
 class SideNav extends StatelessWidget {
   final int activeIndex;
   final ValueChanged<int> onSelect;
@@ -19,62 +20,42 @@ class SideNav extends StatelessWidget {
     required this.onSelect,
   });
 
+  static const _labels = ['Главная', 'Профили', 'Трафик', 'Настройки', 'Runtime log'];
+
   @override
   Widget build(BuildContext context) {
     final app = context.watch<AppState>();
     return Container(
       width: 220,
-      color: AppColors.bg,
+      color: AppColors.navBg,
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           const SizedBox(height: 18),
-          Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 18),
+          const Padding(
+            padding: EdgeInsets.fromLTRB(18, 0, 18, 0),
             child: Text(
-              'XLTD VPN',
-              style: const TextStyle(
-                color: AppColors.textMuted,
-                fontSize: 11,
-                fontWeight: FontWeight.w700,
-                letterSpacing: 1.4,
+              'WORKSPACE',
+              style: TextStyle(
+                fontFamily: kFontMono,
+                color: AppColors.textFaint,
+                fontSize: 10,
+                fontWeight: FontWeight.w600,
+                letterSpacing: 1.6,
               ),
             ),
           ),
           const SizedBox(height: 12),
-          _NavItem(
-            label: 'Главная',
-            icon: Icons.home_rounded,
-            active: activeIndex == 0,
-            onTap: () => onSelect(0),
-          ),
-          _NavItem(
-            label: 'Профили',
-            icon: Icons.layers_rounded,
-            active: activeIndex == 1,
-            onTap: () => onSelect(1),
-          ),
-          _NavItem(
-            label: 'Трафик',
-            icon: Icons.swap_vert_rounded,
-            active: activeIndex == 2,
-            onTap: () => onSelect(2),
-          ),
-          _NavItem(
-            label: 'Настройки',
-            icon: Icons.tune_rounded,
-            active: activeIndex == 3,
-            onTap: () => onSelect(3),
-          ),
-          _NavItem(
-            label: 'Runtime log',
-            icon: Icons.notes_rounded,
-            active: activeIndex == 4,
-            onTap: () => onSelect(4),
-          ),
+          for (var i = 0; i < _labels.length; i++)
+            _NavItem(
+              label: _labels[i],
+              tab: i,
+              active: activeIndex == i,
+              onTap: () => onSelect(i),
+            ),
           const Spacer(),
           _Footer(app: app),
-          const SizedBox(height: 14),
+          const SizedBox(height: 16),
         ],
       ),
     );
@@ -83,12 +64,12 @@ class SideNav extends StatelessWidget {
 
 class _NavItem extends StatefulWidget {
   final String label;
-  final IconData icon;
+  final int tab;
   final bool active;
   final VoidCallback onTap;
   const _NavItem({
     required this.label,
-    required this.icon,
+    required this.tab,
     required this.active,
     required this.onTap,
   });
@@ -99,12 +80,13 @@ class _NavItem extends StatefulWidget {
 
 class _NavItemState extends State<_NavItem> {
   bool _hover = false;
+
   @override
   Widget build(BuildContext context) {
     final active = widget.active;
     final color = active
-        ? AppColors.text
-        : (_hover ? AppColors.text : AppColors.textMuted);
+        ? AppColors.primaryLt
+        : (_hover ? AppColors.textTertiary : AppColors.textMuted);
     return MouseRegion(
       onEnter: (_) => setState(() => _hover = true),
       onExit: (_) => setState(() => _hover = false),
@@ -112,40 +94,51 @@ class _NavItemState extends State<_NavItem> {
         behavior: HitTestBehavior.opaque,
         onTap: widget.onTap,
         child: Container(
-          margin: const EdgeInsets.fromLTRB(12, 2, 12, 2),
-          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 11),
+          margin: const EdgeInsets.fromLTRB(10, 2, 10, 2),
           decoration: BoxDecoration(
-            color: active ? AppColors.surface : Colors.transparent,
+            color: active
+                ? AppColors.surface
+                : (_hover ? AppColors.surfaceAlt : Colors.transparent),
             borderRadius: BorderRadius.circular(10),
-            border: Border.all(
-              color: active ? AppColors.border : Colors.transparent,
-            ),
           ),
-          child: Row(
-            children: [
-              if (active)
+          child: IntrinsicHeight(
+            child: Row(
+              children: [
+                // 2px inset active bar
                 Container(
-                  width: 3,
-                  height: 16,
+                  width: 2,
+                  margin: const EdgeInsets.symmetric(vertical: 8),
                   decoration: BoxDecoration(
-                    color: AppColors.primary,
+                    color: active ? AppColors.primary : Colors.transparent,
                     borderRadius: BorderRadius.circular(2),
                   ),
-                )
-              else
-                const SizedBox(width: 3),
-              const SizedBox(width: 12),
-              Icon(widget.icon, size: 16, color: color),
-              const SizedBox(width: 10),
-              Text(
-                widget.label,
-                style: TextStyle(
-                  color: color,
-                  fontSize: 13,
-                  fontWeight: active ? FontWeight.w600 : FontWeight.w400,
                 ),
-              ),
-            ],
+                const SizedBox(width: 12),
+                Padding(
+                  padding: const EdgeInsets.symmetric(vertical: 11),
+                  child: Row(
+                    children: [
+                      AppIcon(
+                        AppIcon.navAsset(widget.tab),
+                        size: 16,
+                        color: color,
+                      ),
+                      const SizedBox(width: 11),
+                      Text(
+                        widget.label,
+                        style: TextStyle(
+                          fontFamily: kFontSans,
+                          color: color,
+                          fontSize: 13,
+                          fontWeight:
+                              active ? FontWeight.w600 : FontWeight.w400,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ],
+            ),
           ),
         ),
       ),
@@ -161,18 +154,13 @@ class _Footer extends StatelessWidget {
   Widget build(BuildContext context) {
     final state = app.telemetry.state;
     final (coreLabel, coreColor) = switch (state) {
-      VpnState.connected =>
-        ('подключён', AppColors.ok),
-      VpnState.connecting =>
-        ('подключение…', AppColors.primaryLt),
-      VpnState.reconnecting =>
-        ('переподключение', AppColors.tagTun),
-      VpnState.failed =>
-        ('сбой', AppColors.err),
-      VpnState.disconnected =>
-        ('остановлен', AppColors.textDim),
+      VpnState.connected => ('подключён', AppColors.ok),
+      VpnState.connecting => ('подключение…', AppColors.primaryLt),
+      VpnState.reconnecting => ('переподключение', AppColors.primaryLt),
+      VpnState.failed => ('сбой', AppColors.warn),
+      VpnState.disconnected => ('остановлен', AppColors.textDim),
     };
-    final modes = ['SOCKS only', 'User proxy (β)', 'Full tunnel (β)'];
+    const modes = ['Local SOCKS', 'User proxy · β', 'Full tunnel · β'];
     return Padding(
       padding: const EdgeInsets.symmetric(horizontal: 18),
       child: Column(
@@ -182,33 +170,31 @@ class _Footer extends StatelessWidget {
           Text(
             '${VpnConstants.socksHost}:${VpnConstants.socksPort}',
             style: const TextStyle(
-              color: AppColors.primary,
+              color: AppColors.primaryLt,
               fontSize: 11,
-              fontWeight: FontWeight.w600,
-              fontFamily: 'monospace',
+              fontFamily: kFontMono,
             ),
           ),
           const SizedBox(height: 10),
-          const _FootLabel('РЕЖИМ'),
+          const _FootLabel('MODE'),
           Text(
             modes[app.routeMode.clamp(0, modes.length - 1)],
-            style: const TextStyle(color: AppColors.text, fontSize: 11),
+            style: const TextStyle(
+              color: AppColors.textTertiary,
+              fontSize: 11,
+              fontFamily: kFontMono,
+            ),
           ),
           const SizedBox(height: 10),
           const _FootLabel('CORE'),
           Text(
             coreLabel,
-            style: TextStyle(color: coreColor, fontSize: 11),
-          ),
-          if (state == VpnState.connected) ...[
-            const SizedBox(height: 10),
-            const _FootLabel('CARRIER'),
-            Text(
-              '${app.telemetry.carrier ?? '—'} · '
-              '${Transport.label(app.telemetry.transport ?? '')}',
-              style: const TextStyle(color: AppColors.text, fontSize: 11),
+            style: TextStyle(
+              color: coreColor,
+              fontSize: 11,
+              fontFamily: kFontMono,
             ),
-          ],
+          ),
         ],
       ),
     );
@@ -222,14 +208,15 @@ class _FootLabel extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Padding(
-      padding: const EdgeInsets.only(bottom: 2),
+      padding: const EdgeInsets.only(bottom: 3),
       child: Text(
         text,
         style: const TextStyle(
-          color: AppColors.textMuted,
-          fontSize: 10,
-          fontWeight: FontWeight.w700,
-          letterSpacing: 0.8,
+          fontFamily: kFontMono,
+          color: AppColors.textFaint,
+          fontSize: 9,
+          fontWeight: FontWeight.w600,
+          letterSpacing: 1.0,
         ),
       ),
     );

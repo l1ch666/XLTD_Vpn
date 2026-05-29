@@ -1,0 +1,115 @@
+{
+  "$meta": {
+    "product": "XLTD VPN — Windows client",
+    "framework": "WinForms (.NET) — custom-painted controls, no WinUI/WPF.",
+    "source_root": "windows/XLTD.Vpn.Windows/",
+    "key_files": {
+      "MainForm.cs": "window shell + all panels (BuildUi, BuildEditor, BuildConnection, BuildLogs, DrawProfileItem)",
+      "Controls/PillButton.cs": "rounded button, Fill/Hover/Pressed/Text colors",
+      "Controls/RoundedPanel.cs": "rounded card panel (Radius, FillColor, BorderColor)",
+      "Controls/UiShapes.cs": "RoundedRect GraphicsPath helper",
+      "AppInfo.cs": "ProductName, WindowsVersion, DefaultSocksHost/Port, DefaultDns"
+    },
+    "palette_version": "v3 — graphite + electric blue + lime (dark dashboard, sibling of Android)",
+    "redesign_note": "The shipped source is a LIGHT WinForms utility (BackColor #F5F6F8, white RoundedPanels, black PillButton). v3 retargets it to the SAME dark cockpit as Android. Each token lists `source_value` = the original light color it replaces, and `applies_to` = the MainForm.cs member to change.",
+    "units": "All sizes in px (WinForms). Fonts: Segoe UI for UI, Consolas for the runtime log."
+  },
+
+  "window": {
+    "size": { "w": 1080, "h": 740 }, "min": { "w": 960, "h": 660 },
+    "start_position": "CenterScreen",
+    "bg": { "value": "#0E1014", "source_value": "#F5F6F8 (Color.FromArgb 245,246,248)", "applies_to": "MainForm.BackColor + root TableLayoutPanel" },
+    "default_font": "Segoe UI 10",
+    "root_padding": 20,
+    "layout": "2 columns: left rail/profiles 350px (absolute) + right content 100%. (v3 adds a 220px nav rail; see screens.md.)"
+  },
+
+  "color": {
+    "bg":            { "value": "#0E1014", "source_value": "#F5F6F8", "usage": "window background" },
+    "surface":       { "value": "#181B22", "source_value": "#FFFFFF (white)", "usage": "all RoundedPanel cards, PanelCard()" },
+    "surface_alt":   { "value": "#10131A", "source_value": "#F0F2F5", "usage": "text-box fill, route-mode option fill, nested rows" },
+    "line":          { "value": "#262A33", "source_value": "#E8EAEE (border 232,234,238)", "usage": "RoundedPanel.BorderColor, card 1px borders" },
+    "line_strong":   { "value": "#2A3548", "source_value": "—", "usage": "selected profile-row border" },
+    "ink":           { "value": "#F0F1F4", "source_value": "#111111 (17,17,17)", "usage": "primary text, window title, status label" },
+    "meta":          { "value": "#7C8089", "source_value": "#5F6570 (95,101,112)", "usage": "metaLabel, SectionLabel, version label, profile-row meta" },
+    "meta_dim":      { "value": "#525763", "source_value": "#787E88 (120,126,136)", "usage": "hint text under route mode" },
+
+    "primary":       { "value": "#2D7DFF", "source_value": "#111111 (PillButton primary fill)", "usage": "primary button, active nav-rail item + 2px left bar, selected route-mode border" },
+    "primary_hover": { "value": "#4F8BFF", "source_value": "#232323 (35,35,35)", "usage": "PillButton.HoverColor (primary)" },
+    "primary_press": { "value": "#1A5FE0", "source_value": "#000000 (black)", "usage": "PillButton.PressedColor (primary)" },
+    "primary_light": { "value": "#7DA8FF", "usage": "nav-rail active text, card action links, profile-row glyph" },
+
+    "lime":          { "value": "#C9FF3D", "usage": "LIME pulse — 'Tunnel active' status dot, selected-profile active dot, SEI accent, OK log lines, metric sparkline highlight, connect-gradient end" },
+    "vp8":           { "value": "#E17055", "usage": "VP8 accent, Stop/danger button text, WARN lines" },
+    "video":         { "value": "#5B8CFF", "usage": "Video transport accent" },
+
+    "sec_fill":      { "value": "#181B22", "source_value": "#F0F2F5 (240,242,245)", "usage": "PillButton secondary fill (New/Delete/Save) — on dark, surface + 1px line" },
+    "sec_text":      { "value": "#C5D9FF", "source_value": "#111111", "usage": "PillButton secondary text" },
+    "white":         { "value": "#FFFFFF", "usage": "primary button label" }
+  },
+
+  "radius": {
+    "panel":       { "px": 26, "source": "PanelCard() RoundedPanel.Radius=26", "usage": "all main cards" },
+    "panel_inner": { "px": 22, "source": "RoundedPanel default Radius=22" },
+    "profile_row": { "px": 18, "source": "DrawProfileItem UiShapes.RoundedRect(rect,18)", "usage": "owner-drawn ListBox items" },
+    "pill_button": { "px": 18, "source": "PillButton (height 36-40 → near-pill)", "usage": "all buttons" },
+    "metric":      { "px": 14, "usage": "v3 metric cards, route-mode options" },
+    "input":       { "px": 6,  "usage": "text boxes (subtle round on dark)" }
+  },
+
+  "spacing": {
+    "root_padding": 20,
+    "card_padding": 18,
+    "card_margin": 8,
+    "nav_rail_w": 220,
+    "left_col_w": 350,
+    "profile_item_height": 70,
+    "right_rows": { "editor_h": 250, "connection_h": 168, "log_h": "fill" }
+  },
+
+  "type": {
+    "$families": { "ui": "Segoe UI", "mono": "Consolas (runtime log only)" },
+    "window_title":  { "px": 26, "weight": "Bold",   "color": "ink",  "source": "left title label" },
+    "page_title_v3": { "px": 30, "family": "serif/Segoe", "color": "white", "usage": "v3 dashboard page heading 'Канал жив'" },
+    "status":        { "px": 13, "weight": "Bold",   "color": "ink",  "source": "statusLabel" },
+    "section_label": { "px": 10, "weight": "Bold",   "color": "meta", "transform": "—", "source": "SectionLabel()" },
+    "profile_title": { "px": 10, "weight": "Bold",   "color": "ink/white(selected)", "source": "DrawProfileItem" },
+    "profile_meta":  { "px": 8,  "weight": "Regular","color": "meta/#D7DBE2(selected)" },
+    "version":       { "px": 10, "weight": "Regular","color": "meta" },
+    "metric_value":  { "px": 24, "family": "mono",   "color": "white" },
+    "log":           { "px": 9,  "family": "mono",   "color": "#C8CCD4", "source": "logBox Consolas 9" },
+    "button":        { "px": 12, "weight": "Bold" }
+  },
+
+  "pill_button": {
+    "source": "Controls/PillButton.cs",
+    "props": ["FillColor", "HoverColor", "PressedColor", "TextColor"],
+    "primary":   { "fill": "primary #2D7DFF (or blue→lime gradient)", "hover": "#4F8BFF", "press": "#1A5FE0", "text": "#FFFFFF", "applies_to": "StylePrimary()" },
+    "secondary": { "fill": "surface #181B22 +1px line", "hover": "#1E222B", "press": "#262A33", "text": "primary_light #7DA8FF", "applies_to": "StyleSecondary()" },
+    "danger":    { "fill": "surface #181B22 +1px line", "text": "vp8 #E17055", "usage": "Stop button (connected state)" }
+  },
+
+  "profile_row": {
+    "source": "DrawProfileItem (owner-drawn ListBox, ItemHeight=70)",
+    "card_rect": "inset 4px x, 6px y; radius 18",
+    "fill_default":  { "value": "#10131A", "source_value": "#F5F6F8" },
+    "fill_selected": { "value": "#2D7DFF→ but v3 uses #15171F + line_strong border", "source_value": "#111111 (black)", "note": "source paints selected row solid black; v3 dark uses a subtle raised surface + active lime dot" },
+    "title_color":   { "default": "ink #F0F1F4", "selected": "white" },
+    "meta_color":    { "default": "meta #7C8089", "selected": "#D7DBE2" }
+  },
+
+  "route_mode": {
+    "source": "routeModeBox ComboBox (DropDownList)",
+    "options": ["Local SOCKS only", "Windows user proxy (beta)", "Full tunnel / Wintun (admin beta)"],
+    "v3_treatment": "rendered as 3 selectable cards (radius 14) instead of a dropdown; selected card = 1px primary #2D7DFF border + #15182B fill + 'admin · active' tag in primary_light",
+    "socks": "127.0.0.1:10808 (AppInfo.DefaultSocksHost/Port)"
+  },
+
+  "log_status_strings": {
+    "socks_listening": "Core is ready. Local SOCKS is listening.",
+    "carrier_connected": "Carrier connected. Waiting for tunnel handshake...",
+    "handshake_timeout": "Handshake timeout. Check room/key/server side.",
+    "connected": "Connected. Local SOCKS is ready.",
+    "hidden_noise": "[ice]/[dtls]/[sctp] TRACE/DEBUG lines + wsasendto errors are filtered (ShouldHideNoisyCoreLine)"
+  }
+}

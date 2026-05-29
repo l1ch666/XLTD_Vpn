@@ -1,0 +1,121 @@
+{
+  "$meta": {
+    "product": "XLTD VPN — Android client",
+    "package": "com.s1dechain.olcrtcvpn",
+    "source": "app/src/main/java/com/s1dechain/olcrtcvpn/MainActivity.java",
+    "rendering": "100% programmatic Java views (no XML layouts, no Material Components). All views built in code via LinearLayout/ScrollView/TextView/EditText + GradientDrawable backgrounds.",
+    "palette_version": "v3 — graphite + electric blue + lime",
+    "note": "Colors below are the APPROVED v3 rebrand. Each entry maps to the original constant name in MainActivity.java (field `source_const`) and its ORIGINAL purple/cyan value (field `source_value`) so a find-and-replace migration is mechanical.",
+    "density_note": "All sizes are in dp. dp(n) helper = Math.round(n * displayMetrics.density). Text sizes are in sp."
+  },
+
+  "color": {
+    "bg":               { "value": "#0E1014", "source_const": "COLOR_BG",            "source_value": "#0D0D14", "usage": "root window background; bottom-nav uses #10131A (was #101018)" },
+    "surface":          { "value": "#181B22", "source_const": "COLOR_SURFACE_DARK",  "source_value": "#16161F", "usage": "all cards, metric cards, profile rows, chips, badge" },
+    "surface_input":    { "value": "#10131A", "source_const": "(literal #101018)",   "source_value": "#101018", "usage": "EditText / text-input backgrounds, multiline URI box" },
+    "surface_alt":      { "value": "#1A1D24", "source_const": "(literal #1C1C26)",   "source_value": "#1C1C26", "usage": "profile-row icon tile, badge fill, event-tag pill fill" },
+    "line":             { "value": "#262A33", "source_const": "COLOR_SURFACE_LINE",  "source_value": "#2A2A38", "usage": "1dp borders on cards/chips/inputs; inactive signal-bar color" },
+    "line_strong":      { "value": "#2A3548", "source_const": "(literal #383850)",   "source_value": "#383850", "usage": "border of the SELECTED profile row" },
+    "border_dim":       { "value": "#3A3F49", "source_const": "COLOR_BORDER_DIM",    "source_value": "#3E3E50", "usage": "event-row timestamp text" },
+    "border":           { "value": "#3A3F49", "source_const": "COLOR_BORDER",        "source_value": "#444456", "usage": "INACTIVE bottom-nav item text/icon color; default status dot" },
+    "text":             { "value": "#F0F1F4", "source_const": "COLOR_TEXT",          "source_value": "#F0F0F8", "usage": "hero counter, metric value, input text, button label" },
+    "text_bright":      { "value": "#E5E7EC", "source_const": "COLOR_TEXT_BRIGHT",   "source_value": "#E7E7F0", "usage": "connecting-state button label" },
+    "text_tertiary":    { "value": "#C8CCD4", "source_const": "COLOR_TEXT_TERTIARY", "source_value": "#CFCFDB", "usage": "body text (13sp)" },
+    "text_secondary":   { "value": "#C2C6CE", "source_const": "COLOR_TEXT_SECONDARY","source_value": "#CCCCD8", "usage": "profile-row title (bold)" },
+    "text_label":       { "value": "#7C8089", "source_const": "COLOR_TEXT_LABEL",    "source_value": "#7E7E92", "usage": "status badge text, section titles (11sp)" },
+    "text_dim":         { "value": "#646A75", "source_const": "COLOR_TEXT_DIM",      "source_value": "#66667A", "usage": "small text (11sp), top-bar speed, setting field labels, metric delta when inactive" },
+    "text_muted":       { "value": "#525763", "source_const": "COLOR_TEXT_MUTED",    "source_value": "#55556A", "usage": "metric label, session sub-caption, hint text, lowest tier" },
+
+    "primary":          { "value": "#2D7DFF", "source_const": "COLOR_PRIMARY",       "source_value": "#6C5CE7", "usage": "active nav item, connect-button gradient start, metric delta, active-chip border, DNS event tag" },
+    "primary_light":    { "value": "#7DA8FF", "source_const": "COLOR_PRIMARY_LIGHT", "source_value": "#A89FF5", "usage": "profile-row glyph icon color" },
+    "primary_pale":     { "value": "#C5D9FF", "source_const": "COLOR_PRIMARY_PALE",  "source_value": "#D7D2FF", "usage": "active-chip label text, secondary-button label" },
+    "primary_deep":     { "value": "#1A5FE0", "source_const": "COLOR_PRIMARY_DEEP",  "source_value": "#5B4FD6", "usage": "signal bars when filled-but-inactive" },
+
+    "signal":           { "value": "#C9FF3D", "source_const": "COLOR_SEI",           "source_value": "#00D2FF", "usage": "LIME 'pulse' — connected status dot, selected-profile active dot, SEI transport accent, OK event tag, connect-button gradient end" },
+    "vp8":              { "value": "#E17055", "source_const": "COLOR_VP8",           "source_value": "#E17055", "usage": "VP8 transport accent, WARN event tag (unchanged terracotta)" },
+    "video":            { "value": "#5B8CFF", "source_const": "COLOR_VIDEO",         "source_value": "#5B8CFF", "usage": "Video transport accent (unchanged blue)" }
+  },
+
+  "radius": {
+    "chip":        { "dp": 20, "usage": "transport chips (pill-like), status badge" },
+    "card":        { "dp": 16, "usage": "main content cards, secondary button" },
+    "profile_row": { "dp": 14, "usage": "profile list rows" },
+    "metric_card": { "dp": 12, "usage": "metric cards, text inputs" },
+    "input":       { "dp": 12, "usage": "EditText fields" },
+    "icon_tile":   { "dp": 10, "usage": "32x32 profile-row glyph tile" },
+    "button":      { "dp": 16, "usage": "primary connect button (gradient)" },
+    "dot":         { "dp": 8,  "usage": "status dot (8x8)" },
+    "tag":         { "dp": 5,  "usage": "event-row tag pill" },
+    "chip_dot":    { "dp": 6,  "usage": "transport-chip indicator dot (6x6)" }
+  },
+
+  "spacing": {
+    "screen_padding": { "h_dp": 18, "v_dp": 10, "usage": "ScrollView content padding L/R=18, T/B=10" },
+    "card_padding":   { "dp": 14 },
+    "metric_padding": { "h_dp": 12, "v_dp": 10 },
+    "card_gap":       { "dp": 6, "usage": "vertical margin between stacked cards (lpMatchWrap)" },
+    "metric_gap":     { "dp": 4, "usage": "margin around each metric card in the 2x2 grid" },
+    "bottom_nav_padding": { "h_dp": 10, "v_dp": 8 }
+  },
+
+  "type": {
+    "$families": {
+      "sans": "Typeface.DEFAULT / sans-serif (Roboto) — content, titles, buttons, nav labels",
+      "mono": "Typeface.MONOSPACE — every metric/number, section labels, event timestamps & tags, top-bar speed"
+    },
+    "tab_title":      { "sp": 24, "family": "sans", "weight": "bold",   "color": "text",        "usage": "titleBlock() heading (Профили/Трафик/Настройки)" },
+    "hero_counter":   { "sp": 44, "family": "mono", "weight": "normal", "color": "text",        "usage": "session byte counter (value); unit is 16sp mono muted" },
+    "hero_unit":      { "sp": 16, "family": "mono", "weight": "normal", "color": "text_muted" },
+    "button":         { "sp": 15, "family": "sans", "weight": "bold",   "color": "#FFFFFF",     "usage": "connect button" },
+    "button_small":   { "sp": 14, "family": "sans", "weight": "bold",                            "usage": "primary/secondary small buttons; primary=white on gradient, secondary=primary_pale on surface" },
+    "metric_value":   { "sp": 18, "family": "mono", "weight": "normal", "color": "text" },
+    "body":           { "sp": 13, "family": "sans", "weight": "normal", "color": "text_tertiary", "line_spacing_mult": 1.15 },
+    "badge":          { "sp": 11, "family": "sans", "weight": "normal", "color": "text_label" },
+    "small_text":     { "sp": 11, "family": "sans", "weight": "normal", "color": "text_dim",  "line_spacing_mult": 1.15 },
+    "section_title":  { "sp": 10, "family": "mono", "weight": "bold",   "color": "text_muted", "usage": "СЕРВЕРЫ / ПРОФИЛИ / СОБЫТИЯ / СЕССИЯ (UPPERCASE)" },
+    "small_mono":     { "sp": 10, "family": "mono", "weight": "normal", "usage": "metric labels, event time/tags, setting labels, top-bar app name + speed" },
+    "nav_label":      { "sp": 9,  "family": "sans", "weight": "bold",   "transform": "uppercase", "line_spacing_mult": 0.95, "usage": "bottom-nav text under each icon" }
+  },
+
+  "connect_button": {
+    "gradient": { "orientation": "LEFT_RIGHT", "from": "primary (#2D7DFF)", "to": "signal/lime (#C9FF3D)", "radius_dp": 16, "source": "gradientButton()" },
+    "padding": { "h_dp": 16, "v_dp": 15 },
+    "states": {
+      "disconnected": { "label": "Подключить",  "label_color": "#FFFFFF", "bg": "gradient" },
+      "connecting":   { "label": "Остановить",  "label_color": "text_bright", "bg": "surface #181B22 + 1dp line border" },
+      "connected":    { "label": "Отключить",   "label_color": "#FFFFFF", "bg": "gradient" }
+    }
+  },
+
+  "status_dot": {
+    "size_dp": 8,
+    "connected":    "signal / lime  #C9FF3D",
+    "connecting":   "primary / blue #2D7DFF",
+    "disconnected": "border #3A3F49"
+  },
+
+  "transport_accent": {
+    "SEI":   "signal / lime  #C9FF3D",
+    "VP8":   "vp8 #E17055",
+    "Video": "video #5B8CFF",
+    "Data":  "primary / blue #2D7DFF"
+  },
+
+  "signal_bars": {
+    "count": 4,
+    "geometry": { "bar_width_dp": 3, "gap_dp": 2, "corner_radius_dp": 2, "heights_factor": [0.3, 0.53, 0.76, 0.99] },
+    "color_filled_active":   "primary / blue #2D7DFF",
+    "color_filled_inactive": "primary_deep #1A5FE0",
+    "color_empty":           "line #262A33",
+    "level_rule": "selected+connected: latency<=80→4, <=180→3, <=350→2, else 1. connecting→2. SEI profile (not selected)→3. else→2.",
+    "source": "SignalBarsView.onDraw()"
+  },
+
+  "event_tags": {
+    "OK":   { "color": "signal / lime  #C9FF3D", "match": "vpn connected / connect ok / подключён" },
+    "DNS":  { "color": "primary / blue #2D7DFF", "match": "dns" },
+    "TUN":  { "color": "text_dim",               "match": "tun / vpn" },
+    "WARN": { "color": "vp8 #E17055",            "match": "ошибка / fail / timeout" },
+    "LOG":  { "color": "text_dim",               "match": "default" }
+  }
+}

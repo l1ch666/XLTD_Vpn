@@ -158,8 +158,8 @@ class WindowsRouteService {
     final candidates = [
       p.join(exeDir, 'tools', name),
       p.join(exeDir, name),
-      p.normalize(p.join(exeDir, '..', '..', '..', '..',
-          'windows', 'electron-app', 'tools', name)),
+      p.normalize(p.join(exeDir, '..', '..', '..', '..', '..',
+          'windows', 'tools', name)),
     ];
     for (final c in candidates) {
       if (await File(c).exists()) return c;
