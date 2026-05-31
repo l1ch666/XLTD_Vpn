@@ -22,6 +22,14 @@ class WindowsVpnBridge implements VpnBridge {
   DateTime? _connectedAt;
   int _routeMode = 0;
   int _latency = -1;
+  bool _stopping = false;
+
+  /// Public IPv4s the core connects to (carrier signaling + TURN relays),
+  /// harvested from its ICE log. In full-tunnel mode these are pinned to the
+  /// physical gateway so the core never tunnels its own transport.
+  final Set<String> _corePeerIps = <String>{};
+  static final RegExp _ipRe =
+      RegExp(r'\b(\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3})\b');
   late final WindowsRouteService _route =
       WindowsRouteService((e) => _events.add(e));
 
@@ -52,6 +60,8 @@ class WindowsVpnBridge implements VpnBridge {
     if (_proc != null) {
       throw StateError('Core is already running');
     }
+    _stopping = false;
+    _corePeerIps.clear();
     final cfg = UriParser.parse(olcrtcUri);
     _emit(_last.copyWith(
       state: VpnState.connecting,
@@ -96,23 +106,30 @@ class WindowsVpnBridge implements VpnBridge {
     _startTelemetryTimer();
 
     if (_routeMode == 2) {
+      final pid = _proc?.pid ?? -1;
       try {
         await _route.start(
           socksHost: _socksHost,
           socksPort: _socksPort,
-          excludeHosts: [cfg.roomId, cfg.carrier],
+          corePid: pid,
+          peerIps: _corePeerIps.toList(),
           dnsUpstream: cfg.strParam('dns', _defaultDns),
         );
       } catch (e) {
-        _addLog('ERR', 'full tunnel: $e');
+        // Degrade to SOCKS-only rather than killing the session; the route
+        // service has already rolled back any partial routing on failure.
+        _addLog('ERR', 'full tunnel: $e — оставляю SOCKS5 $_socksHost:$_socksPort');
       }
     }
   }
 
   @override
   Future<void> stop() async {
+    _stopping = true;
     _telemetryTimer?.cancel();
     _telemetryTimer = null;
+    // Tear down routing first so the physical default route is restored
+    // before the core (and its loopback SOCKS listener) goes away.
     if (_route.isRunning) {
       try { await _route.stop(); } catch (_) {}
     }
@@ -122,8 +139,23 @@ class WindowsVpnBridge implements VpnBridge {
       try {
         proc.kill(ProcessSignal.sigterm);
       } catch (_) {}
+      // Wait for the process to actually exit so SOCKS port 10808 is released
+      // before any subsequent start() — otherwise the new core hits
+      // "Only one usage of each socket address" and exits.
+      try {
+        await proc.exitCode.timeout(const Duration(seconds: 5));
+      } catch (_) {
+        try {
+          proc.kill(ProcessSignal.sigkill);
+        } catch (_) {}
+        try {
+          await proc.exitCode.timeout(const Duration(seconds: 3));
+        } catch (_) {}
+      }
     }
+    _corePeerIps.clear();
     _connectedAt = null;
+    _stopping = false;
     _emit(TelemetrySnapshot.empty);
     _addLog('LOG', 'tunnel stopped');
   }
@@ -231,6 +263,7 @@ class WindowsVpnBridge implements VpnBridge {
   void _onCoreLine(String line) {
     final t = line.trim();
     if (t.isEmpty) return;
+    _harvestPeerIps(t);
     // Heuristic tagging
     String tag = 'LOG';
     if (t.contains('Link connected') || t.contains('ICE connected')) tag = 'OK';
@@ -240,11 +273,35 @@ class WindowsVpnBridge implements VpnBridge {
     _addLog(tag, t);
   }
 
+  /// Pull public IPv4s out of the core's ICE/candidate lines so full-tunnel
+  /// mode can pin the carrier signaling server + TURN relays outside the
+  /// tunnel. Restricted to ICE-ish lines to avoid pinning unrelated IPs.
+  void _harvestPeerIps(String line) {
+    final low = line.toLowerCase();
+    final iceish = low.contains('[ice]') ||
+        low.contains('candidate') ||
+        low.contains('relay') ||
+        low.contains('srflx') ||
+        low.contains('prflx') ||
+        low.contains('resolved');
+    if (!iceish) return;
+    for (final m in _ipRe.allMatches(line)) {
+      final ip = m.group(1)!;
+      if (_corePeerIps.add(ip) && _routeMode == 2 && _route.isRunning) {
+        // New relay discovered after the tunnel came up — pin it immediately.
+        unawaited(_route.addExclusion(ip));
+      }
+    }
+  }
+
   void _onCoreExit(int code) {
     _telemetryTimer?.cancel();
     _telemetryTimer = null;
     _proc = null;
     _connectedAt = null;
+    // Intentional shutdown: stop() owns the teardown + final state, and a
+    // SIGTERM/kill exit code is not an error worth surfacing.
+    if (_stopping) return;
     _addLog(code == 0 ? 'LOG' : 'ERR', 'core exited (code=$code)');
     _emit(TelemetrySnapshot.empty);
   }
