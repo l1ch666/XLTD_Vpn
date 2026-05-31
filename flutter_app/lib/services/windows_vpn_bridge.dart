@@ -250,8 +250,8 @@ class WindowsVpnBridge implements VpnBridge {
             out.writeln('  tile_rs: ${cfg.intParam('video-tile-rs', 0)}');
           }
         }
-        // videochannel needs ffmpeg; bundled next to olcrtc.exe.
-        out.writeln('ffmpeg: ${yq(p.join(toolsDir, 'ffmpeg.exe'))}');
+        // Branch fix/jitsi-nonblocking-connect: videochannel uses a pure-Go
+        // codec — no external ffmpeg binary, so no `ffmpeg:` key.
         break;
     }
     out

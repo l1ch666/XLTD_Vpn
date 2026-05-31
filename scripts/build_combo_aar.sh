@@ -12,7 +12,7 @@ ANDROID_FFMPEG_ABIS="${ANDROID_FFMPEG_ABIS:-arm64-v8a}"
 ANDROID_FFMPEG_ASSETS_DIR="${PROJECT_ROOT}/app/src/main/assets/ffmpeg"
 ANDROID_FFMPEG_CACHE_DIR="${EXT}/ffmpeg-android"
 OLC_REPO="${OLC_REPO:-https://github.com/openlibrecommunity/olcrtc.git}"
-OLC_REF="${OLC_REF:-master}"
+OLC_REF="${OLC_REF:-fix/jitsi-nonblocking-connect}"
 OLC_PATCHES="${OLC_PATCHES:-}"
 
 mkdir -p "${EXT}" "${PROJECT_ROOT}/app/libs"
@@ -211,7 +211,6 @@ import (
 	"net"
 	"net/http"
 	"net/url"
-	"os"
 	"strings"
 	"sync"
 	"syscall"
@@ -790,16 +789,11 @@ func SetVideoOptions(codec string, width, height, fps int, bitrate string, hw st
 	defaults.videoTileRS = clampNonNegative(tileRS, 200)
 }
 
+// SetFFmpegPath is retained for ABI compatibility with the Android reflection
+// bridge (OlcMobileBridge.setFFmpegPathIfAvailable). Upstream videochannel now
+// uses a pure-Go codec (no external ffmpeg binary), so this is a no-op.
 func SetFFmpegPath(path string) error {
-	path = strings.TrimSpace(path)
-	if path == "" {
-		return errors.New("ffmpeg path is empty")
-	}
-	if _, err := os.Stat(path); err != nil {
-		return fmt.Errorf("ffmpeg path is not accessible: %w", err)
-	}
-	videochannel.FFmpegPath = path
-	_ = os.Setenv("FFMPEG_BIN", path)
+	_ = path
 	return nil
 }
 
