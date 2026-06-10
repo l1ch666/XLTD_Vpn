@@ -76,7 +76,7 @@ class TitleBar extends StatelessWidget {
                 borderRadius: BorderRadius.circular(6),
               ),
               child: const Text(
-                'v2.2.2 · WIN-X64',
+                'v2.2.3 · WIN-X64',
                 style: TextStyle(
                   fontFamily: kFontMono,
                   color: AppColors.textDim,

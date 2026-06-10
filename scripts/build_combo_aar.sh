@@ -12,7 +12,7 @@ ANDROID_FFMPEG_ABIS="${ANDROID_FFMPEG_ABIS:-arm64-v8a}"
 ANDROID_FFMPEG_ASSETS_DIR="${PROJECT_ROOT}/app/src/main/assets/ffmpeg"
 ANDROID_FFMPEG_CACHE_DIR="${EXT}/ffmpeg-android"
 OLC_REPO="${OLC_REPO:-https://github.com/openlibrecommunity/olcrtc.git}"
-OLC_REF="${OLC_REF:-fix/jitsi-nonblocking-connect}"
+OLC_REF="${OLC_REF:-master}"
 OLC_PATCHES="${OLC_PATCHES:-}"
 
 mkdir -p "${EXT}" "${PROJECT_ROOT}/app/libs"

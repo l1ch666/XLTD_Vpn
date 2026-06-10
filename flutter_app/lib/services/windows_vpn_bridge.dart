@@ -24,6 +24,10 @@ class WindowsVpnBridge implements VpnBridge {
   int _latency = -1;
   bool _stopping = false;
 
+  /// DNS upstream of the active session — kept so full-tunnel routing can be
+  /// (re)applied when the route mode is toggled mid-session.
+  String _dnsUpstream = _defaultDns;
+
   /// Public IPv4s the core connects to (carrier signaling + TURN relays),
   /// harvested from its ICE log. In full-tunnel mode these are pinned to the
   /// physical gateway so the core never tunnels its own transport.
@@ -63,6 +67,7 @@ class WindowsVpnBridge implements VpnBridge {
     _stopping = false;
     _corePeerIps.clear();
     final cfg = UriParser.parse(olcrtcUri);
+    _dnsUpstream = cfg.strParam('dns', _defaultDns);
     _emit(_last.copyWith(
       state: VpnState.connecting,
       carrier: cfg.carrier,
@@ -76,8 +81,8 @@ class WindowsVpnBridge implements VpnBridge {
     }
     final runtimeDir = await _runtimeDir();
     final cfgPath = p.join(runtimeDir, 'client.yaml');
-    // olcrtc resolves `data:` and `ffmpeg:` relative to its own exe dir, so the
-    // data/ folder and ffmpeg.exe live next to olcrtc.exe in tools/.
+    // olcrtc resolves `data:` relative to its own exe dir, so the data/ folder
+    // lives next to olcrtc.exe in tools/.
     final toolsDir = p.dirname(exe);
     await File(cfgPath).writeAsString(_buildYaml(cfg, toolsDir));
 
@@ -113,7 +118,7 @@ class WindowsVpnBridge implements VpnBridge {
           socksPort: _socksPort,
           corePid: pid,
           peerIps: _corePeerIps.toList(),
-          dnsUpstream: cfg.strParam('dns', _defaultDns),
+          dnsUpstream: _dnsUpstream,
         );
       } catch (e) {
         // Degrade to SOCKS-only rather than killing the session; the route
@@ -165,7 +170,31 @@ class WindowsVpnBridge implements VpnBridge {
 
   @override
   Future<void> setRouteMode(int mode) async {
+    if (mode == _routeMode) return;
+    final prev = _routeMode;
     _routeMode = mode;
+    // Apply the change live if a tunnel is currently up, so the route-mode
+    // cards take effect immediately instead of only on the next connect.
+    // Reuses the same route start/stop path as connect — no behaviour drift.
+    final connected = _proc != null && _last.state == VpnState.connected;
+    if (!connected) return;
+    try {
+      if (mode == 2 && prev != 2) {
+        await _route.start(
+          socksHost: _socksHost,
+          socksPort: _socksPort,
+          corePid: _proc?.pid ?? -1,
+          peerIps: _corePeerIps.toList(),
+          dnsUpstream: _dnsUpstream,
+        );
+        _addLog('TUN', 'full tunnel enabled (live)');
+      } else if (mode != 2 && prev == 2 && _route.isRunning) {
+        await _route.stop();
+        _addLog('TUN', 'full tunnel disabled — SOCKS5 only');
+      }
+    } catch (e) {
+      _addLog('ERR', 'route mode change: $e');
+    }
   }
 
   // ── internals ──────────────────────────────────────────────────────────
@@ -179,8 +208,7 @@ class WindowsVpnBridge implements VpnBridge {
 
   /// Builds an upstream-olcrtc `cnc` client YAML (schema: docs/configuration.md).
   /// Carriers are jitsi / telemost / wbstream; transports use the full
-  /// `*channel` names. `data:` and (for video) `ffmpeg:` resolve next to
-  /// olcrtc.exe inside [toolsDir].
+  /// `*channel` names. `data:` resolves next to olcrtc.exe inside [toolsDir].
   String _buildYaml(OlcConfig cfg, String toolsDir) {
     final dns = cfg.strParam('dns', _defaultDns);
     String yq(Object v) =>

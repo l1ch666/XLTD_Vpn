@@ -1,7 +1,7 @@
 name: xltd_vpn
 description: "XLTD VPN - olcRTC tunnelling client"
 publish_to: 'none'
-version: 2.2.2+29
+version: 2.2.3+30
 
 environment:
   sdk: ^3.5.4

@@ -14,8 +14,8 @@ android {
         // Keep target 28 — matches the local-MVP foreground-service contract
         // used by OlcVpnService. Raise later when a production FGS policy lands.
         targetSdk = 28
-        versionCode = 29
-        versionName = "2.2.2"
+        versionCode = 30
+        versionName = "2.2.3"
     }
 
     sourceSets {
